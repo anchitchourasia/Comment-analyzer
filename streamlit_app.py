@@ -34,6 +34,48 @@ nltk.download("vader_lexicon", quiet=True)
 MAX_COMMENT_PAGES = 10
 
 
+def get_backend_url():
+    """Return configured backend URL from st.secrets, environment, or default localhost:8000."""
+    try:
+        if "BACKEND_URL" in st.secrets and st.secrets["BACKEND_URL"]:
+            return st.secrets["BACKEND_URL"].rstrip("/")
+    except Exception:
+        pass
+    return os.environ.get("BACKEND_URL", "http://localhost:8000").rstrip("/")
+
+
+@st.cache_resource
+def ensure_backend_running():
+    """If backend URL points to localhost and is not responding, launch uvicorn in a background thread."""
+    backend_url = get_backend_url()
+    if "localhost" in backend_url or "127.0.0.1" in backend_url:
+        try:
+            res = requests.get(f"{backend_url}/health", timeout=1.0)
+            if res.status_code == 200:
+                return
+        except Exception:
+            pass
+
+        import threading
+        import time
+        import uvicorn
+        from backend.main import app as fastapi_app
+
+        def run_uvicorn():
+            uvicorn.run(fastapi_app, host="127.0.0.1", port=8000, log_level="warning")
+
+        t = threading.Thread(target=run_uvicorn, daemon=True)
+        t.start()
+
+        for _ in range(15):
+            try:
+                res = requests.get(f"{backend_url}/health", timeout=0.5)
+                if res.status_code == 200:
+                    break
+            except Exception:
+                time.sleep(0.2)
+
+
 def inject_cinematic_styles():
     st.markdown(
         """
@@ -260,7 +302,7 @@ def render_sidebar():
             token = st.session_state.get("session_token")
             if token:
                 try:
-                    requests.post("http://localhost:8000/api/auth/logout", headers={"x-session-token": token}, timeout=5)
+                    requests.post(f"{get_backend_url()}/api/auth/logout", headers={"x-session-token": token}, timeout=5)
                 except Exception:
                     pass
             if holder["poster"]:
@@ -290,7 +332,7 @@ def render_sidebar():
             st.sidebar.markdown(f"**{ch_id}**")
 
         if st.sidebar.button("Disconnect Channel", key="oauth_disconnect_btn", use_container_width=True):
-            requests.post("http://localhost:8000/api/oauth/disconnect", headers={"x-session-token": st.session_state.get("session_token")})
+            requests.post(f"{get_backend_url()}/api/oauth/disconnect", headers={"x-session-token": st.session_state.get("session_token")})
             if holder["poster"]:
                 holder["poster"].stop()
                 holder["poster"] = None
@@ -663,7 +705,7 @@ def render_pending(state):
                 else:
                     try:
                         res = requests.post(
-                            f"http://localhost:8000/api/channel/{channel_id}/post",
+                            f"{get_backend_url()}/api/channel/{channel_id}/post",
                             headers={"x-session-token": st.session_state.get("session_token")},
                             json={
                                 "answer_text": answer,
@@ -891,7 +933,7 @@ def fetch_me():
         return None
 
     try:
-        res = requests.get("http://localhost:8000/api/me", headers=headers, cookies=cookies)
+        res = requests.get(f"{get_backend_url()}/api/me", headers=headers, cookies=cookies)
         if res.status_code == 200:
             data = res.json()
             if "session_token" in cookies:
@@ -923,7 +965,7 @@ def login_page():
             unsafe_allow_html=True,
         )
         try:
-            res = requests.get("http://localhost:8000/api/auth/login/init")
+            res = requests.get(f"{get_backend_url()}/api/auth/login/init")
             if res.status_code == 200:
                 auth_url = res.json()["auth_url"]
                 st.markdown(
@@ -965,7 +1007,7 @@ def channel_selection_page(me_data):
 
         token = st.session_state.get("session_token")
         if st.button("🔗 Connect YouTube Channel", type="primary", use_container_width=True):
-            res = requests.get("http://localhost:8000/api/oauth/init", headers={"x-session-token": token})
+            res = requests.get(f"{get_backend_url()}/api/oauth/init", headers={"x-session-token": token})
             if res.status_code == 200:
                 st.markdown(f'<meta http-equiv="refresh" content="0;url={res.json()["auth_url"]}">', unsafe_allow_html=True)
             else:
@@ -977,7 +1019,7 @@ def channel_selection_page(me_data):
             st.rerun()
 
         if st.button("🚪 Log out", use_container_width=True):
-            requests.post("http://localhost:8000/api/auth/logout", headers={"x-session-token": token})
+            requests.post(f"{get_backend_url()}/api/auth/logout", headers={"x-session-token": token})
             st.session_state.pop("session_token", None)
             st.session_state.pop("channel_id", None)
             st.session_state.pop("manual_mode", None)
@@ -991,6 +1033,7 @@ def channel_selection_page(me_data):
 
 def main():
     inject_cinematic_styles()
+    ensure_backend_running()
     check_auth_token()
     me_data = fetch_me()
 

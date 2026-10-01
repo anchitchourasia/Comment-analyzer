@@ -1,4 +1,8 @@
 streamlit
+fastapi
+uvicorn
+pydantic
+cryptography
 google-api-python-client
 nltk
 google-auth
