@@ -19,6 +19,10 @@ _active_posters_by_channel = {}
 def _now_iso():
     return datetime.now(timezone.utc).isoformat()
 
+def get_backend_url():
+    import os
+    return os.environ.get("BACKEND_URL", "http://localhost:8000").rstrip("/")
+
 class AnswerPoster:
     def __init__(self, session_token, channel_id, cooldown_path=None, log_path=None):
         self.session_token = session_token
@@ -131,8 +135,9 @@ class AnswerPoster:
 
                 # Post via FastAPI Backend
                 if self.session_token and self.channel_id:
+                    backend_url = get_backend_url()
                     res = requests.post(
-                        f"http://localhost:8000/api/channel/{self.channel_id}/post",
+                        f"{backend_url}/api/channel/{self.channel_id}/post",
                         headers={"x-session-token": self.session_token},
                         json={"answer_text": message, "live_chat_id": live_chat_id, "record_id": record_id}
                     )
