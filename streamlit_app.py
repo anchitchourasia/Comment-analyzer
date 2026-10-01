@@ -903,12 +903,42 @@ def render_memory_editor():
 
 
 def check_auth_token():
+    if "code" in st.query_params and "state" in st.query_params:
+        code = st.query_params["code"]
+        state = st.query_params["state"]
+        st.query_params.clear()
+
+        backend_url = get_backend_url()
+        if state.startswith("state_login_"):
+            try:
+                res = requests.post(
+                    f"{backend_url}/api/auth/login/callback",
+                    json={"code": code, "state": state},
+                    timeout=10,
+                )
+                if res.status_code == 200:
+                    data = res.json()
+                    if "session_token" in data:
+                        st.session_state["session_token"] = data["session_token"]
+            except Exception as e:
+                st.error(f"Login callback error: {e}")
+        elif state.startswith("state_yt_"):
+            token = st.session_state.get("session_token")
+            if token:
+                try:
+                    requests.post(
+                        f"{backend_url}/api/oauth/callback",
+                        headers={"x-session-token": token},
+                        json={"code": code, "state": state},
+                        timeout=10,
+                    )
+                except Exception as e:
+                    st.error(f"OAuth callback error: {e}")
+
     try:
         cookie_token = st.context.cookies.get("session")
         if cookie_token:
             st.session_state["session_token"] = cookie_token
-        elif "session_token" in st.session_state and not cookie_token:
-            st.session_state.pop("session_token", None)
     except Exception:
         pass
 

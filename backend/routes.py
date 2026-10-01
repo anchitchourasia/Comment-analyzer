@@ -27,6 +27,18 @@ discovered_channels_store = {}
 # Mandatory minimum OAuth scopes required by application
 MINIMUM_SCOPES = "openid email profile https://www.googleapis.com/auth/youtube.force-ssl"
 
+def get_frontend_url() -> str:
+    import os
+    from urllib.parse import urlparse
+    url = os.environ.get("FRONTEND_URL") or os.environ.get("STREAMLIT_URL")
+    if url:
+        return url.rstrip("/")
+    redirect_uri = oauth_config.REDIRECT_URI_LOGIN
+    if redirect_uri.startswith("http://") or redirect_uri.startswith("https://"):
+        parsed = urlparse(redirect_uri)
+        return f"{parsed.scheme}://{parsed.netloc}"
+    return "http://localhost:8501"
+
 def perform_single_oauth_exchange_and_discovery(code: str, redirect_uri: str) -> dict:
     """Performs EXACTLY ONE authorization code exchange with Google, obtaining OpenID identity & YouTube channel info.
     
@@ -575,15 +587,16 @@ async def login_init():
 @router.get("/api/auth/login/callback")
 async def login_callback_get(request: Request, code: str = None, state: str = None, error: str = None):
     """Handle Login callback GET from browser redirect (Idempotent single exchange)."""
+    frontend = get_frontend_url()
     if error or not state or state not in login_states:
-        return RedirectResponse(url="http://localhost:8501/?auth_error=invalid_state", status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url=f"{frontend}/?auth_error=invalid_state", status_code=status.HTTP_303_SEE_OTHER)
     
     # Immediately consume state to ensure single execution
     del login_states[state]
 
     res = perform_single_oauth_exchange_and_discovery(code, oauth_config.REDIRECT_URI_LOGIN)
     if not res["success"]:
-        return RedirectResponse(url="http://localhost:8501/?auth_error=oauth_failed", status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url=f"{frontend}/?auth_error=oauth_failed", status_code=status.HTTP_303_SEE_OTHER)
 
     session_token = secrets.token_hex(32)
     user_id = f"google|{res['user_email'] or uuid.uuid4().hex[:12]}"
@@ -614,7 +627,7 @@ async def login_callback_get(request: Request, code: str = None, state: str = No
 
     session_store[session_token] = user_session
 
-    response = RedirectResponse(url="http://localhost:8501/", status_code=status.HTTP_303_SEE_OTHER)
+    response = RedirectResponse(url=f"{frontend}/", status_code=status.HTTP_303_SEE_OTHER)
     response.set_cookie(
         key="session",
         value=session_token,
@@ -711,14 +724,15 @@ async def oauth_init(current_user: UserSessionModel = Depends(get_current_user))
 @router.get("/api/oauth/callback")
 async def oauth_callback_get(request: Request, code: str = None, state: str = None, error: str = None):
     """Handle YouTube OAuth callback GET from browser redirect (Idempotent single exchange)."""
+    frontend = get_frontend_url()
     if error or not state or state not in oauth_states:
-        return RedirectResponse(url="http://localhost:8501/?auth_error=invalid_state", status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url=f"{frontend}/?auth_error=invalid_state", status_code=status.HTTP_303_SEE_OTHER)
 
     owner_user_id = oauth_states.pop(state)
     
     token = request.cookies.get("session") or request.headers.get("x-session-token")
     if not token or token not in session_store or session_store[token].user_id != owner_user_id:
-        return RedirectResponse(url="http://localhost:8501/?auth_error=forbidden", status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url=f"{frontend}/?auth_error=forbidden", status_code=status.HTTP_303_SEE_OTHER)
 
     current_user = session_store[token]
 
@@ -729,7 +743,7 @@ async def oauth_callback_get(request: Request, code: str = None, state: str = No
 
     res = perform_single_oauth_exchange_and_discovery(code, oauth_config.REDIRECT_URI_YOUTUBE)
     if not res["success"]:
-        return RedirectResponse(url="http://localhost:8501/?auth_error=oauth_failed", status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url=f"{frontend}/?auth_error=oauth_failed", status_code=status.HTTP_303_SEE_OTHER)
 
     current_user.account_label = res["account_label"]
     if res["user_email"]:
@@ -757,7 +771,7 @@ async def oauth_callback_get(request: Request, code: str = None, state: str = No
         auth.save_user_tokens(current_user.user_id, ch.id, tokens)
         auth.delete_user_tokens(current_user.user_id, "pending")
 
-    return RedirectResponse(url="http://localhost:8501/", status_code=status.HTTP_303_SEE_OTHER)
+    return RedirectResponse(url=f"{frontend}/", status_code=status.HTTP_303_SEE_OTHER)
 
 @router.post("/api/oauth/callback", response_model=OAuthCallbackResponse)
 async def oauth_callback(payload: OAuthCallbackRequest, current_user: UserSessionModel = Depends(get_current_user)):
