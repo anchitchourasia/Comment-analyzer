@@ -5,11 +5,16 @@ import nltk
 import googleapiclient.discovery
 from nltk.sentiment import SentimentIntensityAnalyzer
 
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # Initialize NLTK
 nltk.download('vader_lexicon')
 
-# YouTube API Key (replace 'YOUR_API_KEY' with your actual API key)
-API_KEY = 'AIzaSyAGQUYdZZSnAapY3KzyVcGBJbK13D1t3Yw'
+# YouTube API Key (loaded from environment variable YOUTUBE_API_KEY)
+API_KEY = os.environ.get('YOUTUBE_API_KEY', '')
 
 def fetch_video_comments(video_id):
     try:

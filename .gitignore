@@ -1,0 +1,15 @@
+.env
+.streamlit/secrets.toml
+__pycache__/
+*.pyc
+qa_data.json
+pending_questions.json
+client_secrets.json
+token.json
+posted_log.jsonl
+*.tmp
+qa_data.json.corrupt-*
+streams/
+legacy_backup/
+backups/
+scripts/__pycache__/

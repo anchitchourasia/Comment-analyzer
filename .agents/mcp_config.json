@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "ruflo": {
+      "command": "D:\\node.exe",
+      "args": [
+        "D:\\npx.cmd",
+        "ruflo",
+        "mcp",
+        "--stdio"
+      ],
+      "env": {
+        "RUFLO_WORKSPACE": "D:\\work\\Comment-analyzer",
+        "RUFLO_MEMORY_NAMESPACE": "comment-analyzer-qa",
+        "NODE_PATH": "D:\\"
+      }
+    }
+  }
+}

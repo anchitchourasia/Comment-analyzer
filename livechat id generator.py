@@ -2,8 +2,13 @@ import googleapiclient.discovery
 from googleapiclient.errors import HttpError
 
 
-# Keep your working API key here temporarily.
-API_KEY = "AIzaSyAGQUYdZZSnAapY3KzyVcGBJbK13D1t3Yw"
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
+
+# API key from environment variable YOUTUBE_API_KEY
+API_KEY = os.environ.get("YOUTUBE_API_KEY", "")
 
 
 def get_live_chat_id(video_id):

@@ -1,0 +1,8 @@
+streamlit
+google-api-python-client
+nltk
+google-auth
+google-auth-oauthlib
+google-auth-httplib2
+requests
+python-dotenv
