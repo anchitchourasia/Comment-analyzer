@@ -104,6 +104,7 @@ class AssistantState:
         with self.lock:
             self.generation += 1
             self.live_chat_id = ""
+            self.video_id = ""
             self.channel_id = ""
             self.recent_messages.clear()
             self.suggestions.clear()
@@ -202,6 +203,8 @@ class AssistantState:
                 "state": self.state,
                 "error": self.error,
                 "live_chat_id": self.live_chat_id,
+                "video_id": self.video_id,
+                "channel_id": self.channel_id,
                 "auto_reply": self.auto_reply,
                 "messages": list(self.recent_messages),
                 "suggestions": list(self.suggestions),
@@ -282,6 +285,7 @@ def process_message(state, author_name, author_channel_id, text, poster,
         return
 
     ch_id = getattr(state, "channel_id", "") or None
+    v_id = getattr(state, "video_id", "") or None
     match, score = qa_engine.find_best_answer(
         text, qa_data=qa_engine.load_qa_data(channel_id=ch_id), channel_id=ch_id
     )
@@ -301,7 +305,14 @@ def process_message(state, author_name, author_channel_id, text, poster,
         )
         return
 
-    upsert_pending(text, channel_id=ch_id, live_chat_id=state.live_chat_id, message_id=message_id, author_name=author_name)
+    upsert_pending(
+        text,
+        channel_id=ch_id,
+        live_chat_id=state.live_chat_id,
+        video_id=v_id,
+        message_id=message_id,
+        author_name=author_name
+    )
 
 
 # --- pending-question queue (in-memory, session-temporary) -------------------------
@@ -331,22 +342,67 @@ def reset_pending(channel_id=None):
                 pass
 
 
-def load_pending(channel_id=None):
+def load_pending(channel_id=None, live_chat_id=None, video_id=None, strict_stream_filter=False):
     with PENDING_LOCK:
         target_file = PENDING_FILE if PENDING_FILE is not None else (storage.get_pending_path(channel_id) if channel_id else None)
         if target_file is not None:
             with storage.interprocess_file_lock(target_file):
                 if not target_file.exists():
-                    return {}
-                try:
-                    data = json.loads(target_file.read_text(encoding="utf-8"))
-                except (json.JSONDecodeError, OSError):
-                    return {}
-                return data if isinstance(data, dict) else {}
-        return dict(_pending)
+                    raw_data = {}
+                else:
+                    try:
+                        data = json.loads(target_file.read_text(encoding="utf-8"))
+                        raw_data = data if isinstance(data, dict) else {}
+                    except (json.JSONDecodeError, OSError):
+                        raw_data = {}
+        else:
+            raw_data = dict(_pending)
+
+        active_state = get_assistant_state()
+        target_chat_id = live_chat_id
+        target_vid_id = video_id
+
+        if strict_stream_filter and target_chat_id is None and target_vid_id is None:
+            if active_state.state == "running":
+                target_chat_id = active_state.live_chat_id or None
+                target_vid_id = active_state.video_id or None
+            else:
+                return {}
+
+        if target_chat_id is None and target_vid_id is None:
+            return raw_data
+
+        filtered = {}
+        for key, entry in raw_data.items():
+            occurrences = entry.get("occurrences", [])
+            matching_occs = []
+            for occ in occurrences:
+                occ_chat = occ.get("live_chat_id")
+                occ_vid = occ.get("video_id")
+
+                chat_match = (target_chat_id is None) or (occ_chat == target_chat_id)
+                vid_match = (target_vid_id is None) or (occ_vid == target_vid_id)
+
+                if chat_match and vid_match:
+                    matching_occs.append(occ)
+
+            entry_chat = entry.get("live_chat_id")
+            entry_vid = entry.get("video_id")
+            entry_level_match = (
+                ((target_chat_id is None) or (entry_chat == target_chat_id)) and
+                ((target_vid_id is None) or (entry_vid == target_vid_id))
+            )
+
+            if matching_occs or entry_level_match:
+                entry_copy = dict(entry)
+                if matching_occs:
+                    entry_copy["occurrences"] = matching_occs
+                filtered[key] = entry_copy
+
+        return filtered
 
 
-def upsert_pending(question_text, channel_id=None, live_chat_id=None, message_id=None, author_name=None):
+def upsert_pending(question_text, channel_id=None, live_chat_id=None, video_id=None, message_id=None, author_name=None):
     """Aggregate repeat asks by normalized question, preserving source occurrence metadata."""
     key = normalize_text(question_text)
     if not key:
@@ -357,7 +413,7 @@ def upsert_pending(question_text, channel_id=None, live_chat_id=None, message_id
         target_file = PENDING_FILE if PENDING_FILE is not None else (storage.get_pending_path(channel_id) if channel_id else None)
         with storage.interprocess_file_lock(target_file):
             if target_file is not None:
-                data = load_pending(channel_id=channel_id)
+                data = load_pending(channel_id=channel_id, strict_stream_filter=False)
             else:
                 data = _pending
 
@@ -370,10 +426,19 @@ def upsert_pending(question_text, channel_id=None, live_chat_id=None, message_id
                 "status": "pending",
                 "posted_message_id": None,
                 "error": None,
+                "live_chat_id": live_chat_id,
+                "video_id": video_id,
+                "channel_id": channel_id,
                 "occurrences": []
             })
             entry["count"] += 1
             entry["last_seen"] = now
+            if live_chat_id:
+                entry["live_chat_id"] = live_chat_id
+            if video_id:
+                entry["video_id"] = video_id
+            if channel_id:
+                entry["channel_id"] = channel_id
 
             cleaned = str(question_text).strip()
             if cleaned and cleaned not in entry["examples"]:
@@ -385,6 +450,8 @@ def upsert_pending(question_text, channel_id=None, live_chat_id=None, message_id
                 "occurrence_id": f"occ_{occ_num}_{int(time.time()*1000)}",
                 "message_id": message_id or f"msg_mock_{int(time.time()*1000)}",
                 "live_chat_id": live_chat_id,
+                "video_id": video_id,
+                "channel_id": channel_id,
                 "author_name": author_name or "viewer",
                 "text": cleaned,
                 "timestamp": now
@@ -402,7 +469,7 @@ def remove_pending(key, channel_id=None):
         target_file = PENDING_FILE if PENDING_FILE is not None else (storage.get_pending_path(channel_id) if channel_id else None)
         with storage.interprocess_file_lock(target_file):
             if target_file is not None:
-                data = load_pending(channel_id=channel_id)
+                data = load_pending(channel_id=channel_id, strict_stream_filter=False)
                 entry = data.pop(key, None)
                 if entry is not None:
                     atomic_write_json(target_file, data)
@@ -605,7 +672,7 @@ def poll_loop(state, api_key, live_chat_id, poster):
                 state.state = "idle"
 
 
-def start_assistant(state, api_key, live_chat_id, poster, channel_id=None):
+def start_assistant(state, api_key, live_chat_id, poster, channel_id=None, video_id=None):
     """Start the poller thread on a FRESH session: temporary memory, the
     pending queue, feed, suggestions, and alerts are wiped first, so
     every stream starts empty. No-op (False) if one is already alive."""
@@ -620,6 +687,7 @@ def start_assistant(state, api_key, live_chat_id, poster, channel_id=None):
     reset_pending()
     state.clear_session()
     state.live_chat_id = live_chat_id
+    state.video_id = video_id or ""
     state.channel_id = channel_id or ""
     state.thread = threading.Thread(
         target=poll_loop,

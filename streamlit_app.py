@@ -413,6 +413,7 @@ def render_sidebar():
 
             if chat_id:
                 st.session_state["live_chat_id"] = chat_id
+                st.session_state["video_id"] = v_clean
                 st.session_state["stream_channel_id"] = v_channel_id
                 if v_channel_id:
                     st.session_state["stream_channel_title"] = v_channel_title
@@ -436,12 +437,17 @@ def render_sidebar():
         if running:
             if not poller.stop_assistant(state):
                 st.sidebar.error("Assistant did not stop in time — try again.")
+            else:
+                st.rerun()
         else:
+            v_id = st.session_state.get("video_id", "")
             started = poller.start_assistant(
-                state, api_key, live_chat_id, holder["poster"], channel_id=app_channel_id
+                state, api_key, live_chat_id, holder["poster"], channel_id=app_channel_id, video_id=v_id
             )
             if not started:
                 st.sidebar.info("Assistant already running.")
+            else:
+                st.rerun()
 
     return state
 
@@ -483,7 +489,7 @@ def render_header(state):
     with m1:
         st.metric("Assistant Status", "LIVE 🟢" if status == "running" else "IDLE ⏸️")
     with m2:
-        pending_data = poller.load_pending(channel_id=channel_id) if channel_id else {}
+        pending_data = poller.load_pending(channel_id=channel_id, live_chat_id=live_chat_id, video_id=snap.get("video_id"), strict_stream_filter=True) if channel_id else {}
         st.metric("Pending Questions", len(pending_data))
     with m3:
         st.metric("Live Chat Feed", len(snap.get("messages", [])))
@@ -602,7 +608,8 @@ def render_superchats(state):
 @st.fragment(run_every=2)
 def render_pending(state):
     holder = _poster_holder()
-    running = state.snapshot()["state"] == "running"
+    snap = state.snapshot()
+    running = snap["state"] == "running"
     channel_id = st.session_state.get("channel_id")
     if not channel_id:
         st.warning("⚠️ No authorized application channel connected. Connect your YouTube channel to manage Q&A.")
@@ -614,7 +621,7 @@ def render_pending(state):
         st.caption("Assistant is stopped. Connect a live stream and click 'Start Assistant' to see new questions from chat.")
         return
 
-    pending = poller.load_pending(channel_id=channel_id)
+    pending = poller.load_pending(channel_id=channel_id, live_chat_id=snap.get("live_chat_id"), video_id=snap.get("video_id"), strict_stream_filter=True)
 
     if not pending:
         st.caption("No new pending questions right now.")

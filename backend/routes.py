@@ -33,10 +33,6 @@ def get_frontend_url() -> str:
     url = os.environ.get("FRONTEND_URL") or os.environ.get("STREAMLIT_URL")
     if url:
         return url.rstrip("/")
-    redirect_uri = oauth_config.REDIRECT_URI_LOGIN
-    if redirect_uri.startswith("http://") or redirect_uri.startswith("https://"):
-        parsed = urlparse(redirect_uri)
-        return f"{parsed.scheme}://{parsed.netloc}"
     return "http://localhost:8501"
 
 def perform_single_oauth_exchange_and_discovery(code: str, redirect_uri: str) -> dict:
