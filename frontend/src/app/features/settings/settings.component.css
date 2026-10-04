@@ -1,0 +1,92 @@
+.settings-container {
+  padding: 24px;
+}
+
+.header-bar {
+  margin-bottom: 24px;
+}
+
+.header-bar h2 {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.header-bar .subtitle {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.settings-section {
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.settings-section h3 {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--accent-cyan);
+  margin-bottom: 12px;
+}
+
+.settings-section .section-sub {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 16px;
+}
+
+.channel-details-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.detail-row {
+  display: flex;
+  font-size: 0.9rem;
+}
+
+.detail-row .label {
+  width: 220px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.detail-row .val {
+  font-weight: 600;
+  color: #fff;
+}
+
+.detail-row .val.highlight {
+  color: var(--accent-cyan);
+  font-family: var(--font-mono);
+}
+
+.detail-row .val.pos {
+  color: var(--accent-emerald);
+  font-weight: 800;
+}
+
+.detail-row .val.neg {
+  color: var(--accent-rose);
+  font-weight: 800;
+}
+
+.actions-row {
+  display: flex;
+  gap: 12px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}

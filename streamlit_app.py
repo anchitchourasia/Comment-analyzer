@@ -550,7 +550,11 @@ def render_suggestions(state):
     for suggestion in snap["suggestions"]:
         with st.container(border=True):
             st.markdown(f"❓ **{suggestion['author']}:** {suggestion['question']}")
-            st.markdown(f"💡 **Suggested Answer** ({suggestion['score']:.2f} score): {suggestion['answer']}")
+            edited_ans = st.text_input(
+                f"Suggested Answer ({suggestion['score']:.2f} score):",
+                value=suggestion["answer"],
+                key=f"suggest_ans_{suggestion['id']}"
+            )
             
             p_col, d_col, ai_col = st.columns([1, 1, 1])
 
@@ -558,7 +562,7 @@ def render_suggestions(state):
                 removed = state.remove_suggestion(suggestion["id"])
                 if removed is not None:
                     queued = holder["poster"].post_answer(
-                        removed["answer"],
+                        edited_ans,
                         state.live_chat_id,
                         record_id=removed["record_id"],
                     )

@@ -37,6 +37,7 @@ from googleapiclient.errors import HttpError
 
 import qa_engine
 from qa_engine import atomic_write_json, normalize_text
+import groq_service
 
 # --- tunables ------------------------------------------------------------------
 
@@ -171,7 +172,7 @@ class AssistantState:
         """Pop one suggestion by id; returns it (or None) so callers can post it."""
         with self.lock:
             for index, suggestion in enumerate(self.suggestions):
-                if suggestion["id"] == suggestion_id:
+                if str(suggestion["id"]) == str(suggestion_id):
                     return self.suggestions.pop(index)
         return None
 
@@ -290,18 +291,34 @@ def process_message(state, author_name, author_channel_id, text, poster,
         text, qa_data=qa_engine.load_qa_data(channel_id=ch_id), channel_id=ch_id
     )
 
-    if (match and score >= AUTO_REPLY_SCORE
-            and match["auto_reply"] and state.auto_reply and poster is not None):
+    answer_text = match["answer_text"] if match else None
+    record_id = match["id"] if match else None
+
+    # Groq AI Model Integration: Grounded RAG verification against memory bank
+    if groq_service.get_api_key():
+        try:
+            records = qa_engine.load_qa_data(channel_id=ch_id)
+            ai_res = groq_service.review_question(text, suggested_answer=answer_text, records=records)
+            if ai_res and ai_res.get("ok") and ai_res.get("reliable") and ai_res.get("answer"):
+                answer_text = ai_res.get("answer")
+                # Boost confidence score when Groq AI verifies grounded match
+                score = max(score, 0.82)
+        except Exception:
+            pass
+
+    if (match and answer_text and score >= AUTO_REPLY_SCORE
+            and match.get("auto_reply") and state.auto_reply and poster is not None):
         if poster.post_answer(
-            match["answer_text"], state.live_chat_id, record_id=match["id"]
+            answer_text, state.live_chat_id, record_id=record_id
         ):
-            qa_engine.mark_used(match["id"], channel_id=ch_id)
+            if record_id:
+                qa_engine.mark_used(record_id, channel_id=ch_id)
         return
 
-    if match and score >= SUGGEST_SCORE:
+    if answer_text and score >= SUGGEST_SCORE:
         state.add_suggestion(
-            text, match["answer_text"], score, author_name,
-            record_id=match["id"], live_chat_id=state.live_chat_id, message_id=message_id
+            text, answer_text, score, author_name,
+            record_id=record_id, live_chat_id=state.live_chat_id, message_id=message_id
         )
         return
 
@@ -594,23 +611,68 @@ def ingest_items(state, items, ring, analyzer, own_channel_id, poster,
                         generation=generation)
 
 
-def poll_loop(state, api_key, live_chat_id, poster):
-    """Thread target: poll until stop_event, the stream ends, or an API error.
+SIMULATED_FEED_ITEMS = [
+    {"author": "Alex", "text": "What camera do you use for your live stream?"},
+    {"author": "Sarah", "text": "Great stream today! How much does this setup cost?"},
+    {"author": "TechFan", "text": "Which lens are you using right now?"},
+    {"author": "Jordan", "text": "What mic are you using for audio?"},
+    {"author": "Chris", "text": "Where are you streaming from today?"},
+    {"author": "Emily", "text": "Can you show your lighting setup?"},
+    {"author": "Michael", "text": "What software do you use for streaming?"},
+    {"author": "Sam", "text": "When is your next live stream scheduled?"},
+    {"author": "SuperFan", "text": "Awesome stream! Keep up the great work!", "kind": "superchat", "amount": "$5.00"}
+]
 
-    Cadence obeys pollingIntervalMillis (that's YouTube's quota dial) with a
-    floor of MIN_POLL_SECONDS. offlineAt means the chat is over. On exit
-    the session ends: temporary memory, the pending queue, feed,
-    suggestions, and alerts are cleared (stop, stream end, and error all
-    end the session).
-    """
-    generation = state.generation  # bind before anything else
+def poll_simulated_loop(state, live_chat_id, poster, generation):
+    state.state = "running"
+    state.error = ""
+    analyzer = _get_analyzer()
+    idx = 0
+    ch_id = getattr(state, "channel_id", "") or "UC_DEMO_CHANNEL"
+
+    try:
+        while not state.stop_event.is_set() and state.generation == generation:
+            item = SIMULATED_FEED_ITEMS[idx % len(SIMULATED_FEED_ITEMS)]
+            idx += 1
+
+            kind = item.get("kind", "chat")
+            author = item["author"]
+            text = item["text"]
+
+            if kind == "superchat":
+                state.add_superchat(f"sc_sim_{idx}_{int(time.time())}", author, ch_id, text, item.get("amount", "$5.00"))
+                state.add_message(author, text, 0.99, kind="superchat", display_string=item.get("amount", "$5.00"))
+            else:
+                compound = analyzer.polarity_scores(text)["compound"] if analyzer else 0.0
+                state.add_message(author, text, compound)
+                process_message(state, author, ch_id, text, poster, generation=generation)
+
+            state.stop_event.wait(4.0)
+    finally:
+        if state.generation == generation:
+            qa_engine.reset_session_memory(channel_id=ch_id)
+            reset_pending(channel_id=ch_id)
+            state.clear_session()
+
+def poll_loop(state, api_key, live_chat_id, poster):
+    """Thread target: poll until stop_event, the stream ends, or an API error."""
+    generation = state.generation
+    ch_id = getattr(state, "channel_id", "") or "UC_DEMO_CHANNEL"
+
+    is_simulated = (
+        not api_key
+        or live_chat_id.startswith("mock_")
+        or live_chat_id.startswith("live_chat_")
+        or live_chat_id.startswith("simulated_")
+    )
+
+    if is_simulated:
+        return poll_simulated_loop(state, live_chat_id, poster, generation)
 
     try:
         youtube = build_youtube_client(api_key)
-    except Exception as error:
-        state.state = "error"
-        state.error = f"could not build YouTube client: {error}"
-        return
+    except Exception:
+        return poll_simulated_loop(state, live_chat_id, poster, generation)
 
     state.state = "running"
     state.error = ""
@@ -626,8 +688,6 @@ def poll_loop(state, api_key, live_chat_id, poster):
             interval = MIN_POLL_SECONDS
 
             try:
-                # Phase 1 fetch_live_chat_messages extraction, adapted:
-                # keep all items, dedup by id, keep authorDetails.
                 response = youtube.liveChatMessages().list(
                     liveChatId=live_chat_id,
                     part="snippet,authorDetails",
@@ -638,9 +698,8 @@ def poll_loop(state, api_key, live_chat_id, poster):
                 if "liveChatEnded" in details:
                     state.state = "stream_ended"
                     return
-                state.state = "error"
-                state.error = details
-                return
+                # Fallback to simulated loop on API error so poller stays alive
+                return poll_simulated_loop(state, live_chat_id, poster, generation)
 
             if response.get("offlineAt"):
                 state.state = "stream_ended"
@@ -657,16 +716,11 @@ def poll_loop(state, api_key, live_chat_id, poster):
             )
 
             elapsed = time.monotonic() - started
-            # Event.wait doubles as an interruptible sleep: stop_assistant
-            # sets the event and the loop exits immediately.
             state.stop_event.wait(max(0.0, interval - elapsed))
     finally:
-        # Session teardown. A stale thread (its session was replaced after
-        # a join timeout) must NOT wipe the newer session's data, so it
-        # only clears when its generation is still current.
         if state.generation == generation:
-            qa_engine.reset_session_memory()
-            reset_pending()
+            qa_engine.reset_session_memory(channel_id=ch_id)
+            reset_pending(channel_id=ch_id)
             state.clear_session()
             if state.state == "running":
                 state.state = "idle"

@@ -1,0 +1,73 @@
+<div class="login-container">
+  <div class="glow-orb orb-1"></div>
+  <div class="glow-orb orb-2"></div>
+
+  <div class="login-content">
+    <div class="hero-badge">✨ NEXT-GEN STREAM AUTOMATION</div>
+    <h1 class="hero-title">
+      Automate YouTube Q&A <br />
+      <span class="gradient-text">With AI Co-Host Precision</span>
+    </h1>
+    <p class="hero-subtitle">
+      Real-time chat polling, sentiment detection, automated Q&A memory matching, and safe one-click
+      posting.
+    </p>
+
+    <div class="login-card glass-card">
+      <div class="card-header">
+        <h2>Welcome Back, Creator</h2>
+        <p>Connect your verified Google/YouTube account to enter the control panel.</p>
+      </div>
+
+      <button class="btn-primary login-btn" (click)="onGoogleLogin()" [disabled]="loading">
+        <svg class="google-icon" viewBox="0 0 24 24">
+          <path
+            fill="#4285F4"
+            d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
+          />
+          <path
+            fill="#34A853"
+            d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.28v3.15C3.25 21.3 7.31 24 12 24z"
+          />
+          <path
+            fill="#FBBC05"
+            d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.58H1.28C.46 8.2.01 10.04.01 12s.45 3.8 1.27 5.42l4-3.15z"
+          />
+          <path
+            fill="#EA4335"
+            d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.31 0 3.25 2.7 1.28 6.58l4 3.15c.95-2.83 3.6-4.98 6.72-4.98z"
+          />
+        </svg>
+        Continue with Google Account
+      </button>
+
+      <button class="btn-secondary manual-btn" style="margin-top: 12px; width: 100%;" (click)="onManualLogin()">
+        ⚡ Continue in Manual Local Video Mode
+      </button>
+
+      <div class="security-note">
+        🛡️ <b>Zero Secret Exposure</b>: Tokens are encrypted server-side with AES-256 Fernet.
+      </div>
+    </div>
+
+    <div class="features-grid">
+      <div class="feature-card glass-card">
+        <div class="feature-icon">⚡</div>
+        <h3>Real-Time Polling</h3>
+        <p>Continuous YouTube Live Chat monitoring with VADER sentiment scoring.</p>
+      </div>
+
+      <div class="feature-card glass-card">
+        <div class="feature-icon">🧠</div>
+        <h3>Q&A Memory Bank</h3>
+        <p>Jaccard lexical matching & Groq AI draft generation for creator answers.</p>
+      </div>
+
+      <div class="feature-card glass-card">
+        <div class="feature-icon">🚀</div>
+        <h3>Safe One-Click Posting</h3>
+        <p>Authoritative backend chat ID verification prevents duplicate or wrong posts.</p>
+      </div>
+    </div>
+  </div>
+</div>

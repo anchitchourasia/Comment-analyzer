@@ -76,19 +76,65 @@ def tokenize(text):
     }
 
 
-def calculate_score(question_one, question_two):
-    """Jaccard overlap of the two token sets. Phase 1, unchanged.
+import difflib
 
-    ponytail: purely lexical — "camera" != "cameras", order ignored.
-    Swap the body (not the signature) for semantic scoring later.
-    """
+SYNONYM_GROUPS = [
+    {"camera", "cam", "gear", "device", "equipment"},
+    {"price", "cost", "fee", "rate", "how much", "charge", "expensive", "cheap", "buy", "pay"},
+    {"location", "where", "city", "place", "live", "country", "from", "staying", "based"},
+    {"lens", "glass", "focal", "aperture"},
+    {"mic", "microphone", "audio", "sound"},
+    {"schedule", "when", "time", "stream", "next", "live"},
+    {"software", "app", "program", "tool", "using", "use", "code", "lang", "language"},
+]
+
+def semantic_word_similarity(w1, w2):
+    if w1 == w2:
+        return 1.0
+    for group in SYNONYM_GROUPS:
+        if w1 in group and w2 in group:
+            return 0.95
+    ratio = difflib.SequenceMatcher(None, w1, w2).ratio()
+    return ratio if ratio >= 0.75 else 0.0
+
+def calculate_semantic_score(question_one, question_two):
+    q1_norm = normalize_text(question_one)
+    q2_norm = normalize_text(question_two)
+    if not q1_norm or not q2_norm:
+        return 0.0
+    
+    tokens1 = [w for w in q1_norm.split() if w not in _STOP_WORDS]
+    tokens2 = [w for w in q2_norm.split() if w not in _STOP_WORDS]
+    
+    if not tokens1 or not tokens2:
+        return 0.0
+    
+    matched_scores = []
+    for t1 in tokens1:
+        best_sim = max((semantic_word_similarity(t1, t2) for t2 in tokens2), default=0.0)
+        if best_sim > 0.65:
+            matched_scores.append(best_sim)
+    
+    if not matched_scores:
+        return 0.0
+        
+    return sum(matched_scores) / max(len(tokens1), len(tokens2))
+
+def calculate_score(question_one, question_two):
+    """RAG Hybrid Score combining lexical token overlap AND semantic word/synonym similarity."""
     words_one = tokenize(question_one)
     words_two = tokenize(question_two)
 
-    if not words_one or not words_two:
-        return 0.0
+    lexical_score = 0.0
+    if words_one and words_two:
+        lexical_score = len(words_one & words_two) / len(words_one | words_two)
 
-    return len(words_one & words_two) / len(words_one | words_two)
+    semantic_score = calculate_semantic_score(question_one, question_two)
+    if lexical_score == 0.0 and semantic_score == 0.0:
+        return 0.0
+    
+    hybrid = max(lexical_score, semantic_score) * 0.6 + ((lexical_score + semantic_score) / 2.0) * 0.4
+    return min(1.0, round(hybrid, 4))
 
 
 # --- storage ------------------------------------------------------------------
@@ -106,12 +152,15 @@ def atomic_write_json(path, data):
 # --- session memory ---------------------------------------------------------------
 
 
-def reset_session_memory():
+def reset_session_memory(channel_id=None):
     """Drop all temporary Q&A. start_assistant calls this so a new stream
     begins empty; the poller calls it on stop, stream end, and video
-    switch. Does not touch any file."""
+    switch. Wipes stream data for the channel."""
     with QA_LOCK:
         _session_records.clear()
+        target_file = QA_FILE if QA_FILE is not None else (storage.get_qa_path(channel_id) if channel_id else None)
+        if target_file is not None and target_file.exists():
+            atomic_write_json(target_file, [])
 
 
 def _to_v2(item):
@@ -337,7 +386,12 @@ def find_best_answer(question, qa_data=None, include_drafts=False, channel_id=No
         if normalized == stored:
             return record, 1.0
 
-        score = calculate_score(normalized, stored)
+        cand_scores = [calculate_score(normalized, stored)]
+        for ex in record.get("original_question_examples", []):
+            if ex:
+                cand_scores.append(calculate_score(question, ex))
+
+        score = max(cand_scores)
         if score > best_score:
             best_match = record
             best_score = score

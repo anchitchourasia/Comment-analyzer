@@ -1,0 +1,71 @@
+<div class="settings-container glass-card">
+  <div class="header-bar">
+    <h2>⚙️ ASSISTANT & CHANNEL SETTINGS</h2>
+    <p class="subtitle">Configure automated moderation policies, bot filters, and YouTube permissions.</p>
+  </div>
+
+  <!-- Account & Channel Status -->
+  <section class="settings-section glass-card">
+    <h3>📺 CONNECTED YOUTUBE CHANNEL</h3>
+
+    @if (auth.user(); as u) {
+      <div class="channel-details-box">
+        <div class="detail-row">
+          <span class="label">Google Account:</span>
+          <span class="val">{{ u.user_email || u.account_label }}</span>
+        </div>
+
+        <div class="detail-row">
+          <span class="label">Connected Channel ID:</span>
+          <span class="val highlight">{{ u.selected_channel_id || 'None Connected' }}</span>
+        </div>
+
+        <div class="detail-row">
+          <span class="label">Write Scope (youtube.force-ssl):</span>
+          <span class="val" [ngClass]="u.has_write_scope ? 'pos' : 'neg'">
+            {{ u.has_write_scope ? 'Authorized 🟢' : 'Missing Write Scope 🔴' }}
+          </span>
+        </div>
+      </div>
+
+      <div class="actions-row">
+        <button class="btn-secondary" (click)="auth.oauthInit()">
+          🔄 Re-Connect / Switch Channel
+        </button>
+        <button class="btn-danger" (click)="onDisconnectChannel()">
+          🔌 Disconnect Channel
+        </button>
+      </div>
+    }
+  </section>
+
+  <!-- Bot Filters & Ignored Accounts -->
+  <section class="settings-section glass-card">
+    <h3>🤖 BOT & NOISE FILTERS</h3>
+    <p class="section-sub">Live chat messages from these display names or channel IDs will be ignored.</p>
+
+    <div class="form-group">
+      <label>Ignored Display Names (comma separated):</label>
+      <input 
+        type="text" 
+        class="input-glass" 
+        placeholder="Nightbot, Streamlabs, Moobot" 
+        [(ngModel)]="ignoredNamesInput" 
+      />
+    </div>
+
+    <div class="form-group">
+      <label>Ignored Channel IDs (comma separated):</label>
+      <input 
+        type="text" 
+        class="input-glass" 
+        placeholder="UCxxxxxxxxxxxx, UCyyyyyyyyyyyy" 
+        [(ngModel)]="ignoredIdsInput" 
+      />
+    </div>
+
+    <button class="btn-primary" (click)="onSaveFilters()">
+      Save Filter Settings
+    </button>
+  </section>
+</div>

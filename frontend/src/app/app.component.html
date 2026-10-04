@@ -1,0 +1,18 @@
+<div class="app-layout">
+  <app-toast></app-toast>
+
+  @if (auth.user()) {
+    <app-topbar></app-topbar>
+    
+    <div class="body-layout">
+      <app-sidebar></app-sidebar>
+      <main class="content-area">
+        <router-outlet></router-outlet>
+      </main>
+    </div>
+  } @else {
+    <main class="full-area">
+      <router-outlet></router-outlet>
+    </main>
+  }
+</div>

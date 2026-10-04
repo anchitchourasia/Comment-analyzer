@@ -1,0 +1,42 @@
+<header class="topbar glass-card">
+  <div class="brand">
+    <div class="brand-logo">✨</div>
+    <div class="brand-text">
+      <span class="title">STREAM ASSISTANT</span>
+      <span class="subtitle">AI CO-HOST & Q&A MODERATOR</span>
+    </div>
+  </div>
+
+  <div class="topbar-right">
+    @if (assistant.status().state === 'LIVE') {
+      <div class="badge-live">
+        <span class="pulse-dot"></span>
+        LIVE ASSISTANT
+      </div>
+    } @else {
+      <div class="badge-idle">
+        <span>⏸️</span> IDLE
+      </div>
+    }
+
+    @if (auth.user()) {
+      <div class="user-badge glass-card">
+        <div class="avatar">{{ auth.user()?.user_name?.charAt(0) || 'U' }}</div>
+        <div class="user-info">
+          <div class="user-name">{{ auth.user()?.user_name || auth.user()?.account_label }}</div>
+          <div class="channel-name">
+            @if (auth.user()?.selected_channel_title) {
+              📺 {{ auth.user()?.selected_channel_title }}
+            } @else {
+              ⚠️ No Channel Selected
+            }
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-secondary btn-icon" (click)="onLogout()" title="Log out">
+        🚪
+      </button>
+    }
+  </div>
+</header>

@@ -77,3 +77,58 @@ class ChannelSelectResponse(BaseModel):
 
 class DisconnectResponse(BaseModel):
     status: str
+
+# --- Assistant Models ---
+class ConnectStreamRequest(BaseModel):
+    video_id: str
+
+class ConnectStreamResponse(BaseModel):
+    live_chat_id: str
+    video_title: str
+    channel_title: str
+
+class StartAssistantRequest(BaseModel):
+    video_id: str
+    live_chat_id: str
+
+class AssistantSettingsRequest(BaseModel):
+    auto_reply: Optional[bool] = None
+    ignored_names: Optional[list[str]] = None
+    ignored_ids: Optional[list[str]] = None
+
+class AiDraftRequest(BaseModel):
+    question: str
+
+class AiDraftResponse(BaseModel):
+    ok: bool
+    reliable: bool
+    answer: str
+    note: str
+
+# --- Q&A Memory Models ---
+class QaMemoryCreateRequest(BaseModel):
+    question: str
+    answer: str
+    auto_reply: bool = True
+
+class QaTestMatcherRequest(BaseModel):
+    question: str
+
+class CommentAnalyzeRequest(BaseModel):
+    video_id: str
+
+class CommentItemModel(BaseModel):
+    text: str
+    author: str = "Viewer"
+    score: float
+
+class CommentAnalyticsResponse(BaseModel):
+    video_id: str
+    total_comments: int
+    positive_count: int
+    negative_count: int
+    neutral_count: int
+    positive_comments: list[CommentItemModel] = []
+    negative_comments: list[CommentItemModel] = []
+    neutral_comments: list[CommentItemModel] = []
+

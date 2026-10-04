@@ -1,0 +1,265 @@
+.qa-container {
+  padding: 24px;
+}
+
+.header-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+}
+
+.header-bar h2 {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.header-bar .subtitle {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.search-input {
+  max-width: 400px;
+}
+
+.records-count {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--accent-cyan);
+}
+
+.sandbox-card {
+  padding: 20px;
+  margin-bottom: 24px;
+  background: rgba(0, 242, 254, 0.03);
+  border-color: rgba(0, 242, 254, 0.2);
+}
+
+.sandbox-card h3 {
+  font-size: 1rem;
+  font-weight: 800;
+  color: var(--accent-cyan);
+}
+
+.sandbox-card .sandbox-sub {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.input-group {
+  display: flex;
+  gap: 12px;
+}
+
+.test-result-box {
+  margin-top: 16px;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.score-gauge {
+  text-align: center;
+  background: rgba(0, 242, 254, 0.1);
+  padding: 10px 16px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 242, 254, 0.3);
+}
+
+.score-gauge .score-num {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: var(--accent-cyan);
+  display: block;
+}
+
+.score-gauge .score-label {
+  font-size: 0.68rem;
+  color: var(--text-dim);
+  text-transform: uppercase;
+  font-weight: 700;
+}
+
+.matched-details {
+  flex: 1;
+}
+
+.matched-details .matched-title {
+  font-weight: 700;
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+.matched-details .matched-answer {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-top: 4px;
+}
+
+.matched-details .no-match {
+  color: var(--accent-amber);
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.records-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  gap: 16px;
+}
+
+.record-card {
+  padding: 18px;
+}
+
+.record-card .card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.record-card .q-label {
+  font-weight: 700;
+  color: #fff;
+  font-size: 0.95rem;
+}
+
+.record-card .a-label {
+  margin-top: 10px;
+  font-size: 0.88rem;
+  color: var(--text-main);
+}
+
+.record-card .a-tag {
+  font-weight: 800;
+  color: var(--accent-cyan);
+  font-size: 0.75rem;
+  margin-right: 6px;
+}
+
+.record-card .delete-btn {
+  background: none;
+  border: none;
+  font-size: 1rem;
+  cursor: pointer;
+}
+
+.record-card .record-meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 12px;
+  font-size: 0.75rem;
+}
+
+.record-card .auto-badge {
+  color: var(--accent-emerald);
+  font-weight: 700;
+}
+
+.record-card .usage-count {
+  color: var(--text-dim);
+}
+
+.empty-records {
+  text-align: center;
+  padding: 40px;
+  color: var(--text-dim);
+  grid-column: 1 / -1;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-card {
+  width: 100%;
+  max-width: 500px;
+  padding: 28px;
+}
+
+.modal-card h3 {
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 20px;
+}
+
+.form-group {
+  margin-bottom: 16px;
+}
+
+.form-group label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.form-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.form-checkbox label {
+  font-size: 0.85rem;
+  color: var(--text-main);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.ai-draft-box {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: rgba(139, 92, 246, 0.1);
+  border: 1px solid rgba(139, 92, 246, 0.3);
+  border-radius: 8px;
+}
+
+.ai-badge {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: #a78bfa;
+  display: block;
+}
+
+.ai-text {
+  font-size: 0.88rem;
+  color: #fff;
+  margin-top: 2px;
+}
+
+.ai-note-text {
+  margin-top: 8px;
+  font-size: 0.78rem;
+  color: var(--text-dim);
+}

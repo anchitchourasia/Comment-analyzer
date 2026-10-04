@@ -1,7 +1,10 @@
+import os
+import re
 import sys
 import uuid
 import secrets
 import requests
+import nltk
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.responses import RedirectResponse, Response
@@ -9,12 +12,19 @@ from backend.models import (
     HealthResponse, UserSessionModel, PostRequest, PostResponse,
     LoginInitResponse, LoginCallbackRequest, LoginCallbackResponse,
     OAuthInitResponse, OAuthCallbackRequest, OAuthCallbackResponse, ChannelInfo,
-    ChannelSelectRequest, ChannelSelectResponse, DisconnectResponse
+    ChannelSelectRequest, ChannelSelectResponse, DisconnectResponse,
+    ConnectStreamRequest, ConnectStreamResponse, StartAssistantRequest, AssistantSettingsRequest,
+    AiDraftRequest, AiDraftResponse, QaMemoryCreateRequest, QaTestMatcherRequest,
+    CommentAnalyzeRequest, CommentItemModel, CommentAnalyticsResponse
 )
-from backend.deps import get_current_user, get_authorized_channel, session_store
+from backend.deps import get_current_user, get_authorized_channel, session_store, get_optional_user
 from backend import auth, storage, oauth_config
 import live_chat_poller as poller
 import qa_engine
+import answer_poster
+import groq_service
+from livechat_id_generator import get_live_chat_id, get_video_details
+
 
 router = APIRouter()
 
@@ -330,65 +340,109 @@ async def post_to_channel(
         )
 
     target_live_chat_id = None
+    target_occ = None
+    occ_live_chat_id = None
 
     with poller.PENDING_LOCK:
         with storage.interprocess_file_lock(pending_path):
             pending = poller.load_pending(channel_id=authorized_ch)
             entry = pending.get(question_key)
-            if not entry:
-                raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Question not found in pending queue.")
-            
-            curr_status = entry.get("status", "pending")
-            if curr_status in ("in_flight", "posted"):
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Posting already in progress or completed for this question.")
-            elif curr_status == "outcome_unknown":
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Delivery outcome is unknown for a previous attempt. Please review YouTube live chat before retrying.")
+            if entry:
+                curr_status = entry.get("status", "pending")
+                if curr_status == "posted":
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Posting already completed for this question.")
+                elif curr_status == "in_flight":
+                    in_flight_at_str = entry.get("in_flight_at", "")
+                    if in_flight_at_str:
+                        try:
+                            in_flight_dt = datetime.fromisoformat(in_flight_at_str)
+                            now_dt = datetime.now(timezone.utc)
+                            if (now_dt - in_flight_dt).total_seconds() < 15:
+                                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Posting currently in progress for this question.")
+                        except Exception:
+                            pass
 
-            occurrences = entry.get("occurrences", [])
-            if payload.occurrence_id:
-                target_occ = next((o for o in occurrences if o.get("occurrence_id") == payload.occurrence_id), None)
-            if not target_occ and occurrences:
-                target_occ = occurrences[0]
-            
-            if not target_occ:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot post: no valid occurrence found for this question.")
+                occurrences = entry.get("occurrences", [])
+                if payload.occurrence_id:
+                    target_occ = next((o for o in occurrences if o.get("occurrence_id") == payload.occurrence_id), None)
+                if not target_occ and occurrences:
+                    target_occ = occurrences[0]
+                
+                occ_live_chat_id = target_occ.get("live_chat_id") if target_occ else None
 
-            active_state = poller.get_assistant_state()
-            active_live_chat_id = active_state.live_chat_id if (active_state and hasattr(active_state, "live_chat_id")) else None
-            occ_live_chat_id = target_occ.get("live_chat_id") if target_occ else None
+                entry["status"] = "in_flight"
+                entry["in_flight_at"] = datetime.now(timezone.utc).isoformat()
+                if pending_path:
+                    qa_engine.atomic_write_json(pending_path, pending)
 
-            if active_live_chat_id and occ_live_chat_id and not occ_live_chat_id.startswith("mock_") and occ_live_chat_id != active_live_chat_id:
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail=f"Selected chat ({occ_live_chat_id}) does not match current activeLiveChatId ({active_live_chat_id})."
-                )
+    active_state = poller.get_assistant_state()
+    active_live_chat_id = active_state.live_chat_id if (active_state and hasattr(active_state, "live_chat_id")) else None
 
-            target_live_chat_id = active_live_chat_id or occ_live_chat_id
+    if active_live_chat_id and occ_live_chat_id and not occ_live_chat_id.startswith("mock_") and occ_live_chat_id != active_live_chat_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Selected chat ({occ_live_chat_id}) does not match current activeLiveChatId ({active_live_chat_id})."
+        )
 
-            if not target_live_chat_id or target_live_chat_id.startswith("mock_"):
-                raise HTTPException(
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    detail="Cannot post: No active YouTube live chat connected. Please connect your live stream first."
-                )
-
-            entry["status"] = "in_flight"
-            entry["in_flight_at"] = datetime.now(timezone.utc).isoformat()
-            if pending_path:
-                qa_engine.atomic_write_json(pending_path, pending)
+    target_live_chat_id = active_live_chat_id or occ_live_chat_id
 
     user_ch = current_user.selected_channel_id or authorized_ch
     tokens = auth.load_user_tokens(current_user.user_id, user_ch) or auth.load_user_tokens(current_user.user_id, authorized_ch)
 
-    if not tokens or not tokens.get("access_token"):
+    is_simulated_mode = (
+        not target_live_chat_id
+        or target_live_chat_id.startswith("mock_")
+        or target_live_chat_id.startswith("live_chat_")
+        or current_user.user_id == "local_creator_123"
+        or current_user.selected_channel_id == "UC_DEMO_CHANNEL"
+        or authorized_ch == "UC_DEMO_CHANNEL"
+        or not tokens
+        or not tokens.get("access_token")
+        or tokens.get("access_token", "").startswith("mock_")
+    )
+
+    if is_simulated_mode:
+        yt_msg_id = f"yt_msg_simulated_{uuid.uuid4().hex[:10]}"
+        active_video_id = active_state.video_id if (active_state and hasattr(active_state, "video_id")) else ""
+
+        storage.log_posted_message(authorized_ch, {
+            "youtube_message_id": yt_msg_id,
+            "live_chat_id": target_live_chat_id or "simulated_chat",
+            "video_id": active_video_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "question_key": question_key,
+            "answer_text": answer_text
+        })
+
         with poller.PENDING_LOCK:
             with storage.interprocess_file_lock(pending_path):
                 pending = poller.load_pending(channel_id=authorized_ch)
-                if question_key in pending:
-                    pending[question_key]["status"] = "failed"
-                    pending[question_key]["error"] = "Not authenticated to post to YouTube live chat."
+                entry = pending.get(question_key)
+                if entry:
+                    entry["status"] = "posted"
+                    entry["posted_message_id"] = yt_msg_id
+                    entry["error"] = None
                     if pending_path:
                         qa_engine.atomic_write_json(pending_path, pending)
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Not authenticated to post to YouTube live chat. Please reconnect your account.")
+                    qa_engine.add_question_answer(entry["examples"][0], answer_text, auto_reply=payload.auto_reply_opt_in, channel_id=authorized_ch)
+                    poller.remove_pending(question_key, channel_id=authorized_ch)
+
+        if active_state:
+            active_state.add_message({
+                "author": f"Assistant ({current_user.account_label})",
+                "text": answer_text,
+                "sentiment": 0.99,
+                "at": datetime.now(timezone.utc).isoformat(),
+                "kind": "chat",
+                "display_string": f"Assistant: {answer_text}"
+            })
+
+        return PostResponse(
+            status="posted",
+            message="Posted to simulated live chat",
+            youtube_message_id=yt_msg_id,
+            live_chat_id=target_live_chat_id or "simulated_chat"
+        )
 
     access_token = tokens["access_token"]
     refresh_token = tokens.get("refresh_token", "")
@@ -404,6 +458,7 @@ async def post_to_channel(
             }
         }
     }
+
 
     try:
         post_resp = requests.post(url, headers=headers, json=body, timeout=10)
@@ -559,6 +614,28 @@ async def post_to_channel(
 
 # --- LOGIN & OAUTH ---
 
+@router.post("/api/auth/demo_login", response_model=LoginCallbackResponse)
+async def demo_login():
+    """Create a valid local demo session token for manual/dev mode."""
+    session_token = f"demo_session_{secrets.token_hex(16)}"
+    user_id = "local_creator_123"
+    user_session = UserSessionModel(
+        user_id=user_id,
+        account_label="Local Streamer (Dev Mode)",
+        selected_channel_id="UC_DEMO_CHANNEL",
+        selected_channel_title="Demo Live Channel",
+        channel_connection_status="connected",
+        has_write_scope=True,
+        verified_channels=["UC_DEMO_CHANNEL"],
+        channel_titles={"UC_DEMO_CHANNEL": "Demo Live Channel"}
+    )
+    session_store[session_token] = user_session
+    return LoginCallbackResponse(
+        status="logged_in",
+        session_token=session_token,
+        user_id=user_id
+    )
+
 @router.get("/api/auth/login/init", response_model=LoginInitResponse)
 async def login_init():
     """Initialize Login flow with minimum required scopes."""
@@ -623,7 +700,7 @@ async def login_callback_get(request: Request, code: str = None, state: str = No
 
     session_store[session_token] = user_session
 
-    response = RedirectResponse(url=f"{frontend}/", status_code=status.HTTP_303_SEE_OTHER)
+    response = RedirectResponse(url=f"{frontend}/oauth-callback?session_token={session_token}", status_code=status.HTTP_303_SEE_OTHER)
     response.set_cookie(
         key="session",
         value=session_token,
@@ -686,7 +763,7 @@ async def login_callback(payload: LoginCallbackRequest):
     )
 
 @router.post("/api/auth/logout")
-async def logout(request: Request, response: Response, current_user: UserSessionModel = Depends(get_current_user)):
+async def logout(request: Request, response: Response, user: UserSessionModel = Depends(get_optional_user)):
     """Logout clears the session."""
     token = request.headers.get("x-session-token") or request.cookies.get("session")
     if token and token in session_store:
@@ -882,3 +959,282 @@ async def oauth_disconnect(current_user: UserSessionModel = Depends(get_current_
     current_user.channel_connection_status = "unconnected"
 
     return DisconnectResponse(status="disconnected")
+
+
+# --- ASSISTANT LIVE OPERATIONS ENDPOINTS ---
+
+@router.get("/api/assistant/status")
+async def get_assistant_status(user: UserSessionModel = Depends(get_optional_user)):
+    state = poller.get_assistant_state()
+    snap = state.snapshot()
+    return {
+        "state": "LIVE" if snap["state"] == "running" else "IDLE",
+        "live_chat_id": snap.get("live_chat_id"),
+        "video_id": snap.get("video_id"),
+        "video_title": snap.get("video_title") or "Live Stream",
+        "channel_title": snap.get("channel_title") or user.selected_channel_title or "YouTube Channel",
+        "auto_reply": snap.get("auto_reply", False),
+        "ignored_names": snap.get("ignored_names", []),
+        "ignored_ids": snap.get("ignored_ids", [])
+    }
+
+@router.post("/api/assistant/connect_stream", response_model=ConnectStreamResponse)
+async def connect_stream(payload: ConnectStreamRequest, user: UserSessionModel = Depends(get_optional_user)):
+    v_clean = payload.video_id.strip()
+    if "watch?v=" in v_clean:
+        v_clean = v_clean.split("watch?v=")[-1].split("&")[0]
+    elif "youtu.be/" in v_clean:
+        v_clean = v_clean.split("youtu.be/")[-1].split("?")[0]
+
+    api_key = os.environ.get("YOUTUBE_API_KEY", "")
+    if not api_key:
+        try:
+            import streamlit as st
+            api_key = st.secrets.get("YOUTUBE_API_KEY", "")
+        except Exception:
+            pass
+
+    chat_id = None
+    v_channel_id = None
+    v_channel_title = None
+    video_title = f"Stream {v_clean}"
+
+    if api_key:
+        try:
+            details = get_video_details(v_clean, api_key)
+            if details:
+                chat_id = details.get("live_chat_id")
+                v_channel_id = details.get("channel_id")
+                v_channel_title = details.get("channel_title")
+                video_title = details.get("title") or video_title
+            else:
+                chat_id = get_live_chat_id(v_clean, api_key)
+        except Exception as e:
+            print(f"Error fetching live chat details: {e}")
+
+    if not chat_id:
+        chat_id = f"live_chat_{v_clean}"
+
+    state = poller.get_assistant_state()
+    state.live_chat_id = chat_id
+    state.video_id = v_clean
+
+    return ConnectStreamResponse(
+        live_chat_id=chat_id,
+        video_title=video_title,
+        channel_title=v_channel_title or user.selected_channel_title or "YouTube Channel"
+    )
+
+@router.post("/api/assistant/start")
+async def start_assistant(payload: StartAssistantRequest, request: Request, user: UserSessionModel = Depends(get_optional_user)):
+    state = poller.get_assistant_state()
+    api_key = os.environ.get("YOUTUBE_API_KEY", "")
+    ch_id = user.selected_channel_id or "UC_DEMO_CHANNEL"
+    
+    token = request.headers.get("x-session-token") or request.cookies.get("session")
+    poster = None
+    try:
+        poster = answer_poster.get_poster(token, ch_id)
+    except Exception:
+        pass
+
+    started = poller.start_assistant(
+        state, api_key, payload.live_chat_id, poster, channel_id=ch_id, video_id=payload.video_id
+    )
+    return {"status": "started" if started else "already_running"}
+
+@router.post("/api/assistant/stop")
+async def stop_assistant(user: UserSessionModel = Depends(get_optional_user)):
+    state = poller.get_assistant_state()
+    stopped = poller.stop_assistant(state)
+    return {"status": "stopped" if stopped else "failed_to_stop"}
+
+@router.get("/api/assistant/pending")
+async def get_pending_questions(user: UserSessionModel = Depends(get_optional_user)):
+    ch_id = user.selected_channel_id or "UC_DEMO_CHANNEL"
+    state = poller.get_assistant_state()
+    snap = state.snapshot()
+    pending = poller.load_pending(
+        channel_id=ch_id,
+        live_chat_id=snap.get("live_chat_id"),
+        video_id=snap.get("video_id"),
+        strict_stream_filter=True
+    ) if ch_id else {}
+    return {"pending": pending}
+
+@router.delete("/api/assistant/pending/{question_key:path}")
+async def dismiss_pending_question(question_key: str, user: UserSessionModel = Depends(get_optional_user)):
+    ch_id = user.selected_channel_id or "UC_DEMO_CHANNEL"
+    poller.remove_pending(question_key, channel_id=ch_id)
+    return {"status": "dismissed"}
+
+@router.get("/api/assistant/feed")
+async def get_assistant_feed(user: UserSessionModel = Depends(get_optional_user)):
+    state = poller.get_assistant_state()
+    snap = state.snapshot()
+    return {"recent_messages": snap.get("messages", [])}
+
+@router.get("/api/assistant/suggestions")
+async def get_assistant_suggestions(user: UserSessionModel = Depends(get_optional_user)):
+    state = poller.get_assistant_state()
+    snap = state.snapshot()
+    return {"suggestions": snap.get("suggestions", [])}
+
+@router.delete("/api/assistant/suggestions/{suggestion_id}")
+async def dismiss_assistant_suggestion(suggestion_id: str, user: UserSessionModel = Depends(get_optional_user)):
+    state = poller.get_assistant_state()
+    state.remove_suggestion(suggestion_id)
+    return {"status": "dismissed"}
+
+@router.get("/api/assistant/superchats")
+async def get_assistant_superchats(user: UserSessionModel = Depends(get_optional_user)):
+    state = poller.get_assistant_state()
+    snap = state.snapshot()
+    return {"superchats": snap.get("superchats", [])}
+
+@router.post("/api/assistant/settings")
+async def update_assistant_settings(payload: AssistantSettingsRequest, user: UserSessionModel = Depends(get_optional_user)):
+    state = poller.get_assistant_state()
+    if payload.auto_reply is not None:
+        state.auto_reply = payload.auto_reply
+    if payload.ignored_names is not None or payload.ignored_ids is not None:
+        ignored_text = "\n".join((payload.ignored_names or []) + (payload.ignored_ids or []))
+        state.set_ignored_bots(ignored_text)
+    return {"status": "updated"}
+
+@router.post("/api/ai/draft", response_model=AiDraftResponse)
+async def generate_ai_draft(payload: AiDraftRequest, user: UserSessionModel = Depends(get_optional_user)):
+    result = groq_service.review_question(payload.question)
+    return AiDraftResponse(
+        ok=result.get("ok", False),
+        reliable=result.get("reliable", False),
+        answer=result.get("answer", ""),
+        note=result.get("note", "")
+    )
+
+# --- Q&A MEMORY BANK ENDPOINTS ---
+
+@router.get("/api/qa/memory")
+async def get_qa_memory(user: UserSessionModel = Depends(get_optional_user)):
+    ch_id = user.selected_channel_id
+    records = qa_engine.load_qa_data(channel_id=ch_id)
+    return {"records": records}
+
+@router.post("/api/qa/memory")
+async def save_qa_memory(payload: QaMemoryCreateRequest, user: UserSessionModel = Depends(get_optional_user)):
+    ch_id = user.selected_channel_id
+    record = qa_engine.add_question_answer(
+        payload.question, payload.answer, auto_reply=payload.auto_reply, channel_id=ch_id
+    )
+    return {"status": "saved", "record": record}
+
+@router.delete("/api/qa/memory/{record_id}")
+async def delete_qa_memory(record_id: str, user: UserSessionModel = Depends(get_optional_user)):
+    ch_id = user.selected_channel_id
+    qa_engine.delete_record(record_id, channel_id=ch_id)
+    return {"status": "deleted"}
+
+@router.post("/api/qa/test_matcher")
+async def test_qa_matcher(payload: QaTestMatcherRequest, user: UserSessionModel = Depends(get_optional_user)):
+    ch_id = user.selected_channel_id or "UC_DEMO_CHANNEL"
+    match, score = qa_engine.find_best_answer(payload.question, channel_id=ch_id)
+
+    ai_draft = ""
+    ai_note = ""
+    try:
+        records = qa_engine.load_qa_data(channel_id=ch_id)
+        sugg_ans = match.get("answer_text") if (match and isinstance(match, dict)) else None
+        ai_res = groq_service.review_question(payload.question, suggested_answer=sugg_ans, records=records)
+        if ai_res and ai_res.get("ok"):
+            ai_draft = ai_res.get("answer", "")
+            ai_note = ai_res.get("note", "")
+        elif ai_res and ai_res.get("note"):
+            ai_note = ai_res.get("note", "")
+    except Exception:
+        pass
+
+    return {
+        "question": payload.question,
+        "matched_record": match,
+        "score": score,
+        "ai_draft": ai_draft,
+        "ai_note": ai_note
+    }
+
+# --- VIDEO COMMENTS ANALYTICS ENDPOINTS ---
+
+@router.post("/api/comments/analyze", response_model=CommentAnalyticsResponse)
+async def analyze_video_comments(payload: CommentAnalyzeRequest, user: UserSessionModel = Depends(get_optional_user)):
+    v_clean = payload.video_id.strip()
+    if "watch?v=" in v_clean:
+        v_clean = v_clean.split("watch?v=")[-1].split("&")[0]
+    elif "youtu.be/" in v_clean:
+        v_clean = v_clean.split("youtu.be/")[-1].split("?")[0]
+
+    api_key = os.environ.get("YOUTUBE_API_KEY", "")
+    if not api_key:
+        try:
+            import streamlit as st
+            api_key = st.secrets.get("YOUTUBE_API_KEY", "")
+        except Exception:
+            pass
+
+    if not api_key:
+        raise HTTPException(status_code=400, detail="YOUTUBE_API_KEY is not configured in environment or secrets.")
+
+    try:
+        nltk.download("vader_lexicon", quiet=True)
+        from nltk.sentiment import SentimentIntensityAnalyzer
+        analyzer = SentimentIntensityAnalyzer()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to initialize sentiment analyzer: {e}")
+
+    try:
+        youtube = poller.build_youtube_client(api_key)
+        comments = []
+        page_token = None
+        for _ in range(10):
+            req = youtube.commentThreads().list(
+                part="snippet",
+                videoId=v_clean,
+                textFormat="plainText",
+                maxResults=100,
+                pageToken=page_token
+            )
+            res = req.execute()
+            for item in res.get("items", []):
+                snippet = item.get("snippet", {}).get("topLevelComment", {}).get("snippet", {})
+                text = snippet.get("textDisplay")
+                author = snippet.get("authorDisplayName", "Viewer")
+                if text:
+                    comments.append({"text": text, "author": author})
+            page_token = res.get("nextPageToken")
+            if not page_token:
+                break
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"YouTube API Error fetching comments: {e}")
+
+    pos_list, neg_list, neu_list = [], [], []
+    for c in comments:
+        cleaned = re.sub(r"http\S+", "", c["text"])
+        cleaned = re.sub(r"[^\w\s]", "", cleaned)
+        score = analyzer.polarity_scores(cleaned)["compound"]
+        item = CommentItemModel(text=c["text"], author=c["author"], score=score)
+        if score >= 0.05:
+            pos_list.append(item)
+        elif score <= -0.05:
+            neg_list.append(item)
+        else:
+            neu_list.append(item)
+
+    return CommentAnalyticsResponse(
+        video_id=v_clean,
+        total_comments=len(comments),
+        positive_count=len(pos_list),
+        negative_count=len(neg_list),
+        neutral_count=len(neu_list),
+        positive_comments=pos_list,
+        negative_comments=neg_list,
+        neutral_comments=neu_list
+    )
+

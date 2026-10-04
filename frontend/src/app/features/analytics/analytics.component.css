@@ -1,0 +1,139 @@
+.analytics-container {
+  padding: 24px;
+}
+
+.header-bar {
+  margin-bottom: 24px;
+}
+
+.header-bar h2 {
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #fff;
+}
+
+.header-bar .subtitle {
+  font-size: 0.88rem;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.search-box {
+  padding: 20px;
+  margin-bottom: 24px;
+}
+
+.input-group {
+  display: flex;
+  gap: 12px;
+}
+
+.stats-overview {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+@media (max-width: 768px) {
+  .stats-overview {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.stat-card {
+  padding: 20px;
+  text-align: center;
+}
+
+.stat-card .stat-num {
+  font-size: 2rem;
+  font-weight: 800;
+  color: #fff;
+  display: block;
+}
+
+.stat-card .stat-label {
+  font-size: 0.72rem;
+  font-weight: 800;
+  color: var(--text-dim);
+  letter-spacing: 0.06em;
+  margin-top: 4px;
+  display: block;
+}
+
+.stat-card.pos .stat-num {
+  color: var(--accent-emerald);
+}
+
+.stat-card.neg .stat-num {
+  color: var(--accent-rose);
+}
+
+.stat-card.neu .stat-num {
+  color: var(--text-muted);
+}
+
+.comments-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+}
+
+@media (max-width: 768px) {
+  .comments-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.comments-col {
+  padding: 20px;
+}
+
+.comments-col h3 {
+  font-size: 1rem;
+  font-weight: 800;
+  margin-bottom: 16px;
+}
+
+.comments-col.pos-col h3 {
+  color: var(--accent-emerald);
+}
+
+.comments-col.neg-col h3 {
+  color: var(--accent-rose);
+}
+
+.comments-list {
+  max-height: 500px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.comment-item {
+  padding: 12px;
+  background: rgba(10, 14, 22, 0.6);
+  border-radius: 10px;
+}
+
+.comment-item .c-author {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #fff;
+}
+
+.comment-item .c-text {
+  font-size: 0.85rem;
+  color: var(--text-main);
+  margin-top: 2px;
+}
+
+.comment-item .c-score {
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-dim);
+  display: block;
+  margin-top: 4px;
+}

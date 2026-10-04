@@ -1,0 +1,82 @@
+<div class="analytics-container glass-card">
+  <div class="header-bar">
+    <div>
+      <h2>📊 VIDEO COMMENT SENTIMENT ANALYTICS</h2>
+      <p class="subtitle">
+        Analyze viewer sentiment breakdown across public YouTube video comment threads.
+      </p>
+    </div>
+  </div>
+
+  <div class="search-box glass-card">
+    <div class="input-group">
+      <input
+        type="text"
+        class="input-glass"
+        placeholder="Enter YouTube Video ID (e.g. umkwDoV6lPk)"
+        [(ngModel)]="videoIdInput"
+      />
+      <button
+        class="btn-primary"
+        (click)="onAnalyze()"
+        [disabled]="analyticsService.loading() || !videoIdInput"
+      >
+        {{ analyticsService.loading() ? 'Analyzing...' : 'Analyze Video Comments' }}
+      </button>
+    </div>
+  </div>
+
+  @if (analyticsService.analyticsData(); as data) {
+    <div class="stats-overview">
+      <div class="stat-card glass-card">
+        <span class="stat-num">{{ data.total_comments }}</span>
+        <span class="stat-label">TOTAL COMMENTS</span>
+      </div>
+
+      <div class="stat-card glass-card pos">
+        <span class="stat-num">{{ data.positive_count }}</span>
+        <span class="stat-label">POSITIVE SENTIMENT</span>
+      </div>
+
+      <div class="stat-card glass-card neg">
+        <span class="stat-num">{{ data.negative_count }}</span>
+        <span class="stat-label">NEGATIVE / CRITICAL</span>
+      </div>
+
+      <div class="stat-card glass-card neu">
+        <span class="stat-num">{{ data.neutral_count }}</span>
+        <span class="stat-label">NEUTRAL</span>
+      </div>
+    </div>
+
+    <div class="comments-grid">
+      <!-- Positive Comments -->
+      <div class="comments-col glass-card pos-col">
+        <h3>🟢 Positive Feedback ({{ data.positive_comments.length }})</h3>
+        <div class="comments-list">
+          @for (c of data.positive_comments; track c.text) {
+            <div class="comment-item">
+              <span class="c-author">{{ c.author }}:</span>
+              <p class="c-text">{{ c.text }}</p>
+              <span class="c-score">+{{ c.score.toFixed(2) }}</span>
+            </div>
+          }
+        </div>
+      </div>
+
+      <!-- Negative Comments -->
+      <div class="comments-col glass-card neg-col">
+        <h3>🔴 Critical / Negative Comments ({{ data.negative_comments.length }})</h3>
+        <div class="comments-list">
+          @for (c of data.negative_comments; track c.text) {
+            <div class="comment-item">
+              <span class="c-author">{{ c.author }}:</span>
+              <p class="c-text">{{ c.text }}</p>
+              <span class="c-score">{{ c.score.toFixed(2) }}</span>
+            </div>
+          }
+        </div>
+      </div>
+    </div>
+  }
+</div>

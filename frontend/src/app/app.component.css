@@ -1,0 +1,58 @@
+.app-layout {
+  min-height: 100vh;
+  padding: 16px;
+}
+
+.body-layout {
+  display: flex;
+  gap: 20px;
+  align-items: flex-start;
+}
+
+.content-area {
+  flex: 1;
+  min-width: 0;
+}
+
+.full-area {
+  width: 100%;
+}
+
+.global-loader-container {
+  min-height: 80vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.loader-card {
+  padding: 40px;
+  text-align: center;
+  max-width: 440px;
+}
+
+.spinner {
+  width: 48px;
+  height: 48px;
+  border: 4px solid rgba(0, 242, 254, 0.2);
+  border-top-color: var(--accent-cyan);
+  border-radius: 50%;
+  animation: spin 1s infinite linear;
+  margin: 0 auto 20px auto;
+}
+
+h2 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: #fff;
+}
+
+p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}

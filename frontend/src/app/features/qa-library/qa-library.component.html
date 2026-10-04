@@ -1,0 +1,125 @@
+<div class="qa-container glass-card">
+  <div class="header-bar">
+    <div>
+      <h2>🧠 Q&A MEMORY BANK</h2>
+      <p class="subtitle">Pre-approved answers automatically matched against viewer live chat questions.</p>
+    </div>
+    <button class="btn-primary" (click)="showAddModal = true">
+      ➕ Add Approved Q&A
+    </button>
+  </div>
+
+  <!-- Search Filter & Sandbox Toggle -->
+  <div class="toolbar">
+    <input 
+      type="text" 
+      class="input-glass search-input" 
+      placeholder="🔍 Search approved questions & answers..." 
+      [(ngModel)]="searchQuery" 
+    />
+    <div class="records-count">{{ filteredRecords().length }} Approved Records</div>
+  </div>
+
+  <!-- Matcher Sandbox Tester Tool -->
+  <div class="sandbox-card glass-card">
+    <h3>🧪 MATCHER SANDBOX TESTER</h3>
+    <p class="sandbox-sub">Type a test question to verify Jaccard lexical similarity score against memory bank.</p>
+    <div class="input-group">
+      <input 
+        type="text" 
+        class="input-glass" 
+        placeholder="Type test viewer question (e.g. What camera do you use?)" 
+        [(ngModel)]="testQuestionInput" 
+      />
+      <button class="btn-secondary" (click)="onRunSandboxTest()" [disabled]="testing || !testQuestionInput">
+        {{ testing ? 'Testing...' : 'Run Test' }}
+      </button>
+    </div>
+
+    @if (testResult) {
+      <div class="test-result-box glass-card">
+        <div class="score-gauge">
+          <span class="score-num">{{ (testResult.score * 100).toFixed(0) }}%</span>
+          <span class="score-label">Similarity Match</span>
+        </div>
+        <div class="matched-details">
+          @if (testResult.matched_record) {
+            <div class="matched-title">Matched Question: "{{ testResult.matched_record.normalized_question }}"</div>
+            <div class="matched-answer">Answer: "{{ testResult.matched_record.answer_text }}"</div>
+          } @else {
+            <div class="no-match">No high-confidence lexical match found (Score < 0.50).</div>
+          }
+
+          @if (testResult.ai_draft) {
+            <div class="ai-draft-box">
+              <span class="ai-badge">✨ Groq AI Grounded Draft:</span>
+              <p class="ai-text">"{{ testResult.ai_draft }}"</p>
+            </div>
+          } @else if (testResult.ai_note) {
+            <div class="ai-note-text">🤖 Groq AI Note: {{ testResult.ai_note }}</div>
+          }
+        </div>
+      </div>
+    }
+  </div>
+
+  <!-- Approved Q&A Records Table / Grid -->
+  <div class="records-grid">
+    @if (filteredRecords().length === 0) {
+      <div class="empty-records">No approved Q&A records found.</div>
+    } @else {
+      @for (rec of filteredRecords(); track rec.id) {
+        <div class="record-card glass-card">
+          <div class="card-header">
+            <span class="q-label">Q: {{ rec.normalized_question }}</span>
+            <button class="btn-icon delete-btn" (click)="onDeleteRecord(rec.id)" title="Delete record">🗑️</button>
+          </div>
+
+          <div class="a-label">
+            <span class="a-tag">ANSWER:</span> {{ rec.answer_text }}
+          </div>
+
+          <div class="record-meta">
+            @if (rec.auto_reply) {
+              <span class="auto-badge">⚡ Auto-Reply Enabled</span>
+            }
+            @if (rec.usage_count) {
+              <span class="usage-count">Used {{ rec.usage_count }} times</span>
+            }
+          </div>
+        </div>
+      }
+    }
+  </div>
+
+  <!-- Add New Q&A Modal -->
+  @if (showAddModal) {
+    <div class="modal-overlay">
+      <div class="modal-card glass-card">
+        <h3>Add Pre-Approved Q&A Pair</h3>
+
+        <div class="form-group">
+          <label>Question Phrasing:</label>
+          <input type="text" class="input-glass" placeholder="e.g. What camera is that?" [(ngModel)]="newQuestion" />
+        </div>
+
+        <div class="form-group">
+          <label>Approved Answer:</label>
+          <textarea class="input-glass" rows="3" placeholder="e.g. I use a Sony A7 IV with a 24-70mm f/2.8 lens!" [(ngModel)]="newAnswer"></textarea>
+        </div>
+
+        <div class="form-checkbox">
+          <input type="checkbox" id="autoReplyCb" [(ngModel)]="newAutoReply" />
+          <label for="autoReplyCb">Enable Auto-Reply if confidence score ≥ 0.80</label>
+        </div>
+
+        <div class="modal-actions">
+          <button class="btn-secondary" (click)="showAddModal = false">Cancel</button>
+          <button class="btn-primary" (click)="onSaveNewRecord()" [disabled]="!newQuestion || !newAnswer">
+            Save & Approve
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+</div>
