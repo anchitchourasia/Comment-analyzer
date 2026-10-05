@@ -708,7 +708,7 @@ def render_pending(state):
                 "🚀 Save & Post Now",
                 key=f"pending_post_{key}",
                 type="primary",
-                disabled=not st.session_state.get("session_token") or not channel_id or curr_status in ("in_flight", "outcome_unknown", "failed"),
+                disabled=not st.session_state.get("session_token") or not channel_id or curr_status in ("in_flight", "outcome_unknown"),
                 use_container_width=True,
             ):
                 if not answer.strip():

@@ -138,6 +138,9 @@ export class DashboardComponent {
       next: () => {
         delete this.answerTexts[key];
         this.assistant.fetchPending();
+      },
+      error: () => {
+        this.assistant.fetchPending();
       }
     });
   }

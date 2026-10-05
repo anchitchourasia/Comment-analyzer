@@ -224,6 +224,17 @@
   color: var(--accent-rose);
 }
 
+.card-error-banner {
+  margin-top: 10px;
+  background: rgba(255, 59, 92, 0.15);
+  border: 1px solid rgba(255, 59, 92, 0.4);
+  color: #ff859b;
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+
 .occurrence-selector {
   margin-top: 10px;
 }

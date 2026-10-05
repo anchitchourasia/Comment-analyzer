@@ -333,47 +333,43 @@ async def post_to_channel(
     question_key = payload.question_key
     pending_path = storage.get_pending_path(authorized_ch)
 
-    if not question_key:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Cannot post: question_key is required and must correspond to a pending question occurrence."
-        )
-
     target_live_chat_id = None
     target_occ = None
-    occ_live_chat_id = None
+    occ_live_chat_id = payload.live_chat_id
 
-    with poller.PENDING_LOCK:
-        with storage.interprocess_file_lock(pending_path):
-            pending = poller.load_pending(channel_id=authorized_ch)
-            entry = pending.get(question_key)
-            if entry:
-                curr_status = entry.get("status", "pending")
-                if curr_status == "posted":
-                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Posting already completed for this question.")
-                elif curr_status == "in_flight":
-                    in_flight_at_str = entry.get("in_flight_at", "")
-                    if in_flight_at_str:
-                        try:
-                            in_flight_dt = datetime.fromisoformat(in_flight_at_str)
-                            now_dt = datetime.now(timezone.utc)
-                            if (now_dt - in_flight_dt).total_seconds() < 15:
-                                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Posting currently in progress for this question.")
-                        except Exception:
-                            pass
+    if question_key:
+        with poller.PENDING_LOCK:
+            with storage.interprocess_file_lock(pending_path):
+                pending = poller.load_pending(channel_id=authorized_ch)
+                entry = pending.get(question_key)
+                if entry:
+                    curr_status = entry.get("status", "pending")
+                    if curr_status == "posted":
+                        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Posting already completed for this question.")
+                    elif curr_status == "in_flight":
+                        in_flight_at_str = entry.get("in_flight_at", "")
+                        if in_flight_at_str:
+                            try:
+                                in_flight_dt = datetime.fromisoformat(in_flight_at_str)
+                                now_dt = datetime.now(timezone.utc)
+                                if (now_dt - in_flight_dt).total_seconds() < 15:
+                                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Posting currently in progress for this question.")
+                            except Exception:
+                                pass
 
-                occurrences = entry.get("occurrences", [])
-                if payload.occurrence_id:
-                    target_occ = next((o for o in occurrences if o.get("occurrence_id") == payload.occurrence_id), None)
-                if not target_occ and occurrences:
-                    target_occ = occurrences[0]
-                
-                occ_live_chat_id = target_occ.get("live_chat_id") if target_occ else None
+                    occurrences = entry.get("occurrences", [])
+                    if payload.occurrence_id:
+                        target_occ = next((o for o in occurrences if o.get("occurrence_id") == payload.occurrence_id), None)
+                    if not target_occ and occurrences:
+                        target_occ = occurrences[0]
+                    
+                    if target_occ and target_occ.get("live_chat_id"):
+                        occ_live_chat_id = target_occ.get("live_chat_id")
 
-                entry["status"] = "in_flight"
-                entry["in_flight_at"] = datetime.now(timezone.utc).isoformat()
-                if pending_path:
-                    qa_engine.atomic_write_json(pending_path, pending)
+                    entry["status"] = "in_flight"
+                    entry["in_flight_at"] = datetime.now(timezone.utc).isoformat()
+                    if pending_path:
+                        qa_engine.atomic_write_json(pending_path, pending)
 
     active_state = poller.get_assistant_state()
     active_live_chat_id = active_state.live_chat_id if (active_state and hasattr(active_state, "live_chat_id")) else None
@@ -428,14 +424,13 @@ async def post_to_channel(
                     poller.remove_pending(question_key, channel_id=authorized_ch)
 
         if active_state:
-            active_state.add_message({
-                "author": f"Assistant ({current_user.account_label})",
-                "text": answer_text,
-                "sentiment": 0.99,
-                "at": datetime.now(timezone.utc).isoformat(),
-                "kind": "chat",
-                "display_string": f"Assistant: {answer_text}"
-            })
+            active_state.add_message(
+                f"Assistant ({current_user.account_label})",
+                answer_text,
+                0.99,
+                "chat",
+                f"Assistant: {answer_text}"
+            )
 
         return PostResponse(
             status="posted",
