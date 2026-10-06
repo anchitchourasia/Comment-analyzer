@@ -7,6 +7,14 @@
       <span class="nav-label">Dashboard</span>
     </a>
 
+    <a routerLink="/live-qa" routerLinkActive="active" class="nav-item">
+      <span class="nav-icon">⚡</span>
+      <span class="nav-label">Live Q&A Queue</span>
+      @if (pendingCount() > 0) {
+        <span class="badge-count">{{ pendingCount() }}</span>
+      }
+    </a>
+
     <a routerLink="/qa-library" routerLinkActive="active" class="nav-item">
       <span class="nav-icon">🧠</span>
       <span class="nav-label">Q&A Memory</span>

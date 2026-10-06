@@ -42,6 +42,21 @@
   box-shadow: 0 4px 16px rgba(0, 242, 254, 0.3);
 }
 
+.badge-count {
+  margin-left: auto;
+  background: #ef4444;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+.nav-item.active .badge-count {
+  background: #000;
+  color: #00f2fe;
+}
+
 .sidebar-footer {
   padding: 14px;
   border-radius: 12px;

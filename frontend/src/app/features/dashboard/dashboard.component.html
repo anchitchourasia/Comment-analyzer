@@ -20,14 +20,18 @@
 
     <div class="connect-form">
       <div class="input-group">
-        <input 
-          type="text" 
-          class="input-glass" 
-          placeholder="Paste YouTube Video URL or Video ID (e.g. umkwDoV6lPk)" 
+        <input
+          type="text"
+          class="input-glass"
+          placeholder="Paste YouTube Video URL or Video ID (e.g. umkwDoV6lPk)"
           [(ngModel)]="videoInput"
           [disabled]="connecting"
         />
-        <button class="btn-primary" (click)="onConnectStream()" [disabled]="connecting || !videoInput">
+        <button
+          class="btn-primary"
+          (click)="onConnectStream()"
+          [disabled]="connecting || !videoInput"
+        >
           {{ connecting ? 'Connecting...' : 'Connect Stream' }}
         </button>
       </div>
@@ -41,7 +45,11 @@
           </div>
           <div class="control-actions">
             @if (assistant.status().state !== 'LIVE') {
-              <button class="btn-primary start-btn" (click)="onStartAssistant()" [disabled]="starting">
+              <button
+                class="btn-primary start-btn"
+                (click)="onStartAssistant()"
+                [disabled]="starting"
+              >
                 ▶️ Start Assistant
               </button>
             } @else {
@@ -55,253 +63,87 @@
     </div>
   </section>
 
-  <!-- Main Workspace: Left Column (Queues & Composer), Right Column (Live Feed & Alerts) -->
+  <!-- Main Workspace: Left Column (Live Q&A Queue Navigation Widget), Right Column (Live Feed & Alerts) -->
   <div class="workspace-layout">
     <div class="main-column">
-      <!-- Pending Questions Queue -->
-      <section class="queue-section glass-card">
-        <div class="section-title-bar">
-          <div class="title-wrap">
-            <h3>🙋 NEW QUESTIONS FROM CHAT</h3>
-            <span class="count-pill">{{ pendingKeys().length }}</span>
+      <!-- Live Q&A Queue Overview & Quick Access Widget -->
+      <section class="qa-widget-section glass-card">
+        <div class="widget-header">
+          <div class="widget-title">
+            <span class="widget-icon">⚡</span>
+            <div>
+              <h3>LIVE Q&A MODERATION QUEUE</h3>
+              <p class="widget-sub">
+                View and respond to pending viewer questions and AI suggestions
+              </p>
+            </div>
           </div>
-          <span class="stream-filter-note">Stream Isolated</span>
+          <a routerLink="/live-qa" class="btn-primary open-qa-btn"> ⚡ Open Live Q&A Queue ➔ </a>
         </div>
 
-        @if (assistant.loadingPending()) {
-          <div class="loading-box">
-            <span class="pulse-text">Loading pending viewer questions...</span>
+        <div class="metrics-row">
+          <div class="metric-card glass-card" routerLink="/live-qa">
+            <div class="metric-icon">🙋</div>
+            <div class="metric-data">
+              <span class="metric-value">{{ pendingKeys().length }}</span>
+              <span class="metric-label">New Questions</span>
+            </div>
           </div>
-        } @else if (!auth.hasChannelSelected()) {
-          <div class="empty-state">
-            <div class="empty-icon">📺</div>
-            <p>Select a connected channel and active live stream to load the live assistant.</p>
-            <span class="empty-sub">Connect your YouTube channel in settings to get started.</span>
+
+          <div class="metric-card glass-card" routerLink="/live-qa">
+            <div class="metric-icon">⚡</div>
+            <div class="metric-data">
+              <span class="metric-value high">{{
+                assistant.highConfidenceSuggestions().length
+              }}</span>
+              <span class="metric-label">High Confidence (≥80%)</span>
+            </div>
           </div>
-        } @else if (assistant.status().state !== 'LIVE' && !activeVideoTitle) {
-          <div class="empty-state">
-            <div class="empty-icon">📡</div>
-            <p>Select a connected channel and active live stream to load the live assistant.</p>
-            <span class="empty-sub">Paste a YouTube video URL above and click "Connect Stream".</span>
+
+          <div class="metric-card glass-card" routerLink="/live-qa">
+            <div class="metric-icon">💡</div>
+            <div class="metric-data">
+              <span class="metric-value medium">{{
+                assistant.mediumConfidenceSuggestions().length
+              }}</span>
+              <span class="metric-label">Medium Confidence (50-79%)</span>
+            </div>
           </div>
-        } @else if (pendingKeys().length === 0) {
-          <div class="empty-state">
-            <div class="empty-icon">💬</div>
-            <p>No unaddressed viewer questions in queue.</p>
-            <span class="empty-sub">Questions detected during live chat polling will appear here.</span>
+        </div>
+
+        <!-- Quick Preview of Pending Questions -->
+        <div class="preview-section">
+          <div class="preview-header">
+            <h4>📋 Queue Quick Preview</h4>
+            <a routerLink="/live-qa" class="view-all-link"
+              >Manage All ({{ pendingKeys().length }}) ➔</a
+            >
           </div>
-        } @else {
-          <div class="questions-list">
-            @for (key of pendingKeys(); track key) {
-              @if (assistant.pendingQuestions()[key]; as entry) {
-                <div class="question-card glass-card">
-                  <div class="card-top">
-                    <div class="question-main">
-                      <span class="question-key-label">{{ entry.displayText }}</span>
-                      <div class="ask-meta">
-                        <span class="ask-count">Asked {{ entry.count }} times</span>
-                        @if (entry.status) {
-                          <span class="status-tag" [ngClass]="entry.status">{{ entry.status }}</span>
-                        }
-                      </div>
+
+          @if (pendingKeys().length === 0 && assistant.suggestions().length === 0) {
+            <div class="empty-widget">
+              <span class="empty-icon">💬</span>
+              <p>No pending questions or suggestions at the moment.</p>
+              <span class="empty-sub"
+                >Streamer Q&A detected during live polling will gather in your Q&A Queue.</span
+              >
+            </div>
+          } @else {
+            <div class="preview-list">
+              @for (key of pendingKeys().slice(0, 3); track key) {
+                @if (assistant.pendingQuestions()[key]; as entry) {
+                  <div class="preview-item glass-card">
+                    <div class="item-main">
+                      <span class="item-text">"{{ entry.displayText }}"</span>
+                      <span class="item-count">Asked {{ entry.count }}×</span>
                     </div>
+                    <a routerLink="/live-qa" class="btn-secondary btn-sm">Answer ➔</a>
                   </div>
-
-                  @if (entry.status === 'failed' || entry.error) {
-                    <div class="card-error-banner">
-                      ⚠️ {{ entry.error || 'Post rejected by YouTube API. Google account is not authorized to post in this live chat. Ask channel owner to add it as a moderator.' }}
-                    </div>
-                  }
-
-                  <!-- Occurrence Selector Dropdown if multiple occurrences exist -->
-                  @if (entry.occurrences && entry.occurrences.length > 1) {
-                    <div class="occurrence-selector">
-                      <label>Viewer Phrasings ({{ entry.occurrences.length }}):</label>
-                      <select [(ngModel)]="selectedOccurrences[key]" class="input-glass select-occ">
-                        @for (occ of entry.occurrences; track occ.occurrenceId) {
-                          <option [value]="occ.occurrenceId">
-                            "{{ occ.text }}" — {{ occ.authorName }}
-                          </option>
-                        }
-                      </select>
-                    </div>
-                  }
-
-                  <!-- Answer Composer Textarea -->
-                  <div class="answer-composer">
-                    <textarea 
-                      class="input-glass answer-textarea" 
-                      rows="2" 
-                      placeholder="Type approved response to send to YouTube Live Chat..."
-                      [(ngModel)]="answerTexts[key]"
-                    ></textarea>
-
-                    <div class="composer-toolbar">
-                      <button 
-                        class="btn-secondary ai-draft-btn" 
-                        (click)="onGetAiDraft(entry.displayText, key)"
-                        [disabled]="assistant.loadingAiDraftKey() === key"
-                      >
-                        {{ assistant.loadingAiDraftKey() === key ? '✨ Drafting...' : '✨ Get AI Draft' }}
-                      </button>
-
-                      <div class="post-buttons">
-                        <button 
-                          class="btn-secondary save-only-btn" 
-                          (click)="onSaveApproveOnly(entry.displayText, answerTexts[key], key)"
-                        >
-                          💾 Save & Approve
-                        </button>
-
-                        <button 
-                          class="btn-primary save-post-btn" 
-                          (click)="onSaveAndPostNow(entry, key)"
-                          [disabled]="assistant.postingQuestionKey() === key || !answerTexts[key]"
-                        >
-                          {{ assistant.postingQuestionKey() === key ? '🚀 Posting...' : '🚀 Save & Post Now' }}
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                }
               }
-            }
-          </div>
-        }
-      </section>
-
-      <!-- High Confidence Match Suggestions (>= 80%) -->
-      @if (assistant.highConfidenceSuggestions().length > 0) {
-        <section class="suggestions-section glass-card high-conf">
-          <div class="section-title-bar">
-            <h3>⚡ HIGH CONFIDENCE SUGGESTIONS (≥ 80%)</h3>
-          </div>
-
-          <div class="suggestions-list">
-            @for (sugg of assistant.highConfidenceSuggestions(); track sugg.id) {
-              <div class="suggestion-card glass-card">
-                <div class="sugg-header">
-                  <span class="user-ask">"{{ sugg.questionText }}"</span>
-                  <span class="confidence-score high">Score: {{ sugg.scorePercentage }}%</span>
-                </div>
-
-                <div class="matched-answer-preview">
-                  <div class="preview-header">
-                    <span class="preview-label">Suggested Answer:</span>
-                    @if (editingSuggestions[sugg.id]) {
-                      <span class="editing-tag">✏️ Editing Mode</span>
-                    }
-                  </div>
-                  @if (editingSuggestions[sugg.id]) {
-                    <textarea 
-                      class="input-glass answer-textarea sugg-edit-textarea" 
-                      rows="2" 
-                      [ngModel]="getSuggestionAnswer(sugg)"
-                      (ngModelChange)="onSuggestionAnswerChange(sugg.id, $event)"
-                      placeholder="Edit suggested response before posting..."
-                    ></textarea>
-                  } @else {
-                    <p class="answer-text-display">"{{ getSuggestionAnswer(sugg) }}"</p>
-                  }
-                </div>
-
-                <div class="sugg-actions">
-                  <span class="sugg-author">Asked by: {{ sugg.authorName }}</span>
-                  <div class="sugg-btn-group">
-                    <button 
-                      class="btn-secondary edit-toggle-btn" 
-                      (click)="toggleEditSuggestion(sugg)"
-                    >
-                      {{ editingSuggestions[sugg.id] ? '✖️ Cancel' : '✏️ Edit Answer' }}
-                    </button>
-                    <button 
-                      class="btn-secondary dismiss-btn" 
-                      (click)="onDismissSuggestion(sugg)"
-                    >
-                      🗑️ Dismiss
-                    </button>
-                    <button 
-                      class="btn-primary" 
-                      (click)="onPostSuggestion(sugg)"
-                      [disabled]="assistant.postingQuestionKey() === (sugg.recordId || sugg.questionText)"
-                    >
-                      🚀 Post Response
-                    </button>
-                  </div>
-                </div>
-              </div>
-            }
-          </div>
-        </section>
-      }
-
-      <!-- Medium Confidence Match Suggestions (50% - 79%) -->
-      <section class="suggestions-section glass-card">
-        <div class="section-title-bar">
-          <h3>💡 MEDIUM CONFIDENCE SUGGESTIONS (50% - 79%)</h3>
+            </div>
+          }
         </div>
-
-        @if (assistant.mediumConfidenceSuggestions().length === 0) {
-          <div class="empty-suggestions">
-            <p>No medium-confidence suggestions for this stream.</p>
-          </div>
-        } @else {
-          <div class="suggestions-list">
-            @for (sugg of assistant.mediumConfidenceSuggestions(); track sugg.id) {
-              <div class="suggestion-card glass-card">
-                <div class="sugg-header">
-                  <span class="user-ask">"{{ sugg.questionText }}"</span>
-                  <span class="confidence-score medium">Score: {{ sugg.scorePercentage }}%</span>
-                </div>
-
-                <div class="matched-answer-preview">
-                  <div class="preview-header">
-                    <span class="preview-label">Suggested Answer:</span>
-                    @if (editingSuggestions[sugg.id]) {
-                      <span class="editing-tag">✏️ Editing Mode</span>
-                    }
-                  </div>
-                  @if (editingSuggestions[sugg.id]) {
-                    <textarea 
-                      class="input-glass answer-textarea sugg-edit-textarea" 
-                      rows="2" 
-                      [ngModel]="getSuggestionAnswer(sugg)"
-                      (ngModelChange)="onSuggestionAnswerChange(sugg.id, $event)"
-                      placeholder="Edit suggested response before posting..."
-                    ></textarea>
-                  } @else {
-                    <p class="answer-text-display">"{{ getSuggestionAnswer(sugg) }}"</p>
-                  }
-                </div>
-
-                <div class="sugg-actions">
-                  <span class="sugg-author">Asked by: {{ sugg.authorName }}</span>
-                  <div class="sugg-btn-group">
-                    <button 
-                      class="btn-secondary edit-toggle-btn" 
-                      (click)="toggleEditSuggestion(sugg)"
-                    >
-                      {{ editingSuggestions[sugg.id] ? '✖️ Cancel' : '✏️ Edit Answer' }}
-                    </button>
-                    <button 
-                      class="btn-secondary dismiss-btn" 
-                      (click)="onDismissSuggestion(sugg)"
-                    >
-                      🗑️ Dismiss
-                    </button>
-                    <button 
-                      class="btn-primary" 
-                      (click)="onPostSuggestion(sugg)"
-                      [disabled]="assistant.postingQuestionKey() === (sugg.recordId || sugg.questionText)"
-                    >
-                      🚀 Post Response
-                    </button>
-                  </div>
-                </div>
-              </div>
-            }
-          </div>
-        }
       </section>
     </div>
 
@@ -317,9 +159,7 @@
         </div>
 
         @if (assistant.superchats().length === 0) {
-          <div class="empty-feed">
-            No Superchat alerts detected for this live stream yet.
-          </div>
+          <div class="empty-feed">No Superchat alerts detected for this live stream yet.</div>
         } @else {
           <div class="superchats-list">
             @for (sc of assistant.superchats(); track sc.id) {
@@ -348,9 +188,13 @@
           @if (assistant.loadingFeed()) {
             <div class="empty-feed">Loading live chat feed...</div>
           } @else if (assistant.status().state !== 'LIVE' && !activeVideoTitle) {
-            <div class="empty-feed">Select a connected channel and active live stream to load the live assistant.</div>
+            <div class="empty-feed">
+              Select a connected channel and active live stream to load the live assistant.
+            </div>
           } @else if (assistant.recentMessages().length === 0) {
-            <div class="empty-feed">No live chat messages yet. Start the assistant and wait for new chat activity.</div>
+            <div class="empty-feed">
+              No live chat messages yet. Start the assistant and wait for new chat activity.
+            </div>
           } @else {
             @for (msg of assistant.recentMessages(); track msg.id) {
               <div class="chat-msg-row">
