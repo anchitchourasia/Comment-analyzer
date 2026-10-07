@@ -345,3 +345,270 @@
 .dismiss-btn:hover {
   background: rgba(248, 113, 113, 0.15);
 }
+
+/* Auto-Responder Panel Styles */
+.auto-responder-panel {
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(0, 242, 254, 0.2);
+  border-radius: 12px;
+}
+
+.ar-actions-top {
+  display: flex;
+  gap: 12px;
+}
+
+.default-preset-btn {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  color: #34d399;
+}
+
+.default-preset-btn:hover {
+  background: rgba(16, 185, 129, 0.3);
+}
+
+.ar-notice {
+  font-size: 0.82rem;
+  color: #94a3b8;
+  background: rgba(51, 65, 85, 0.3);
+  padding: 8px 14px;
+  border-radius: 8px;
+  margin: 12px 0 16px 0;
+  border-left: 3px solid var(--accent-cyan);
+}
+
+.trigger-form-card {
+  padding: 20px;
+  margin-bottom: 20px;
+  background: rgba(10, 15, 30, 0.8);
+  border: 1px solid rgba(0, 242, 254, 0.3);
+  border-radius: 10px;
+}
+
+.trigger-form-card h4 {
+  font-size: 1rem;
+  color: #fff;
+  margin-bottom: 14px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.form-group.full-width {
+  grid-column: 1 / -1;
+}
+
+.form-group label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #cbd5e1;
+}
+
+.form-help {
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.form-group-checkbox {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+  color: #e2e8f0;
+  cursor: pointer;
+}
+
+.form-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.empty-triggers {
+  text-align: center;
+  padding: 30px;
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 8px;
+  color: #94a3b8;
+}
+
+.empty-triggers .empty-sub {
+  font-size: 0.8rem;
+  display: block;
+  margin-top: 6px;
+}
+
+.triggers-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.trigger-card {
+  padding: 16px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.trigger-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.trigger-title {
+  font-weight: 800;
+  font-size: 0.9rem;
+  color: #38bdf8;
+}
+
+.auto-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(148, 163, 184, 0.2);
+  color: #94a3b8;
+}
+
+.auto-badge.enabled {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+}
+
+.keywords-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.kw-label {
+  font-size: 0.72rem;
+  color: #64748b;
+  font-weight: 700;
+}
+
+.kw-tag {
+  background: rgba(56, 189, 248, 0.15);
+  color: #7dd3fc;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  font-size: 0.72rem;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 600;
+}
+
+.response-preview {
+  background: rgba(0, 0, 0, 0.3);
+  padding: 8px 12px;
+  border-radius: 6px;
+}
+
+.res-label {
+  font-size: 0.7rem;
+  color: #64748b;
+  display: block;
+}
+
+.res-text {
+  font-size: 0.85rem;
+  color: #f1f5f9;
+  margin-top: 2px;
+  word-break: break-word;
+}
+
+.trigger-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.trigger-card-actions .edit-btn {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+}
+
+.trigger-card-actions .delete-btn {
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  color: #f87171;
+  border-color: rgba(248, 113, 113, 0.3);
+}
+
+.trigger-tester-box {
+  padding: 16px 20px;
+  background: rgba(30, 41, 59, 0.5);
+  border-radius: 10px;
+  margin-top: 10px;
+}
+
+.tester-header h4 {
+  font-size: 0.9rem;
+  color: #f8fafc;
+}
+
+.tester-sub {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.tester-input-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.tester-input {
+  flex: 1;
+}
+
+.test-result-card {
+  margin-top: 12px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.15);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #fca5a5;
+}
+
+.test-result-card.matched {
+  background: rgba(16, 185, 129, 0.15);
+  border-color: rgba(16, 185, 129, 0.4);
+  color: #6ee7b7;
+}
+
+.result-status {
+  font-weight: 800;
+  font-size: 0.85rem;
+}
+
+.result-details {
+  margin-top: 6px;
+  font-size: 0.85rem;
+  color: #f1f5f9;
+}

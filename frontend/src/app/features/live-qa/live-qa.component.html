@@ -23,6 +23,134 @@
       </a>
     </div>
   </header>
+  <!-- Auto-Responder Keyword System Panel -->
+  <section class="auto-responder-panel glass-card">
+    <div class="section-title-bar">
+      <div class="title-wrap">
+        <h3>🤖 LIVE CHAT AUTO-RESPONDER (KEYWORD TRIGGERS)</h3>
+        <span class="count-pill badge-live">{{ qa.records().length }} Active Triggers</span>
+      </div>
+      <div class="ar-actions-top">
+        <button class="btn-primary" (click)="showAutoResponderForm = !showAutoResponderForm; editingTriggerId = null;">
+          {{ showAutoResponderForm ? '✖️ Close Form' : '➕ Add Keyword Trigger' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="ar-notice">
+      ℹ️ <strong>100% Real-Time System:</strong> Enter any custom keywords and answers below or convert incoming viewer questions in real-time. Active triggers detect matching messages live from YouTube Chat and automatically clear when you stop the stream.
+    </div>
+
+    <!-- Keyword Trigger Add/Edit Form -->
+    @if (showAutoResponderForm) {
+      <div class="trigger-form-card glass-card">
+        <h4>{{ editingTriggerId ? '✏️ Edit Keyword Auto-Response Trigger' : '➕ Create New Keyword Auto-Response Trigger' }}</h4>
+        <div class="form-grid">
+          <div class="form-group">
+            <label>Trigger Question / Title Name:</label>
+            <input type="text" class="input-glass" [(ngModel)]="triggerTitle" placeholder="e.g. PC Specs, Stream Schedule, Discord" />
+          </div>
+
+          <div class="form-group">
+            <label>Trigger Keywords (comma separated):</label>
+            <input type="text" class="input-glass" [(ngModel)]="triggerKeywords" placeholder="e.g. pc specs, specs, hardware, pc setup, what is your pc specs" />
+            <small class="form-help">Matches any incoming live chat containing these keywords.</small>
+          </div>
+
+          <div class="form-group full-width">
+            <label>Saved Auto-Response Text (Sent directly to YouTube Live Chat):</label>
+            <textarea class="input-glass answer-textarea" rows="2" [(ngModel)]="triggerAnswer" placeholder="e.g. PC Specs: RTX 4090 GPU, Intel i9-14900K CPU, 64GB DDR5 RAM..."></textarea>
+          </div>
+
+          <div class="form-group-checkbox">
+            <label class="checkbox-label">
+              <input type="checkbox" [(ngModel)]="triggerAutoReply" />
+              <span>⚡ Enable Auto-Posting (Automatically send to YouTube Live Chat when detected)</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="form-buttons">
+          <button class="btn-secondary" (click)="resetTriggerForm()">Cancel</button>
+          <button class="btn-primary" (click)="onSaveCustomKeywordTrigger()">
+            {{ editingTriggerId ? '💾 Save Changes' : '➕ Save Trigger Rule' }}
+          </button>
+        </div>
+      </div>
+    }
+
+    <!-- Active Triggers Grid -->
+    @if (qa.records().length === 0) {
+      <div class="empty-triggers">
+        <p>No active keyword triggers configured for this stream.</p>
+        <span class="empty-sub">Click <strong>"Add Default PC Specs Trigger"</strong> or <strong>"Add Custom Keyword Trigger"</strong> above to auto-reply to viewers instantly!</span>
+      </div>
+    } @else {
+      <div class="triggers-grid">
+        @for (record of qa.records(); track record.id) {
+          <div class="trigger-card glass-card">
+            <div class="trigger-card-header">
+              <span class="trigger-title">❓ {{ record.normalized_question | uppercase }}</span>
+              <span class="auto-badge" [class.enabled]="record.auto_reply">
+                {{ record.auto_reply ? '⚡ Auto-Posting ON' : '⏸️ Manual' }}
+              </span>
+            </div>
+
+            <div class="keywords-wrap">
+              <span class="kw-label">Keywords:</span>
+              @for (kw of (record.original_question_examples || record.example_phrasings || [record.normalized_question]); track kw) {
+                <span class="kw-tag">{{ kw }}</span>
+              }
+            </div>
+
+            <div class="response-preview">
+              <span class="res-label">Saved Response:</span>
+              <p class="res-text">"{{ record.answer_text }}"</p>
+            </div>
+
+            <div class="trigger-card-actions">
+              <button class="btn-secondary edit-btn" (click)="onEditTrigger(record)">✏️ Edit</button>
+              <button class="btn-secondary delete-btn" (click)="onDeleteTrigger(record.id)">🗑️ Delete</button>
+            </div>
+          </div>
+        }
+      </div>
+    }
+
+    <!-- Interactive Live Match Tester -->
+    <div class="trigger-tester-box glass-card">
+      <div class="tester-header">
+        <h4>🧪 Test Live Chat Keyword Detection</h4>
+        <span class="tester-sub">Simulate a viewer live chat message to verify keyword detection & response</span>
+      </div>
+
+      <div class="tester-input-row">
+        <input type="text" class="input-glass tester-input" [(ngModel)]="testInputText" placeholder="e.g. hey streamer what is your pc specs?" (keyup.enter)="onTestKeywordDetection()" />
+        <button class="btn-primary" (click)="onTestKeywordDetection()" [disabled]="testingMatcher">
+          {{ testingMatcher ? 'Testing...' : '🔍 Test Detection' }}
+        </button>
+      </div>
+
+      @if (testResult) {
+        <div class="test-result-card" [class.matched]="testResult.score >= 0.8">
+          <div class="result-top">
+            <span class="result-status">
+              {{ testResult.score >= 0.8 ? '✅ MATCH DETECTED (' + (testResult.score * 100).toFixed(0) + '%)' : '❌ NO KEYWORD MATCH' }}
+            </span>
+          </div>
+
+          @if (testResult.matched_record) {
+            <div class="result-details">
+              <p><strong>Matched Trigger:</strong> {{ testResult.matched_record.normalized_question }}</p>
+              <p><strong>Auto-Response to Live Chat:</strong> "{{ testResult.matched_record.answer_text }}"</p>
+            </div>
+          } @else {
+            <p class="result-no-match">No keyword trigger matched this message.</p>
+          }
+        </div>
+      }
+    </div>
+  </section>
 
   <!-- Content Grid -->
   <div class="qa-workspace">
@@ -108,6 +236,14 @@
                     </button>
 
                     <div class="post-buttons">
+                      <button 
+                        class="btn-secondary auto-responder-convert-btn" 
+                        (click)="onQuickAddTriggerFromPending(entry.displayText, key)"
+                        title="Convert this real-time question into an auto-responder keyword trigger"
+                      >
+                        ⚡ Save as Auto-Responder
+                      </button>
+
                       <button 
                         class="btn-secondary save-only-btn" 
                         (click)="onSaveApproveOnly(entry.displayText, answerTexts[key], key)"

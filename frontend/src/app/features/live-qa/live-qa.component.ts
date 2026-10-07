@@ -7,6 +7,7 @@ import { AssistantService } from '../../core/services/assistant.service';
 import { QaService } from '../../core/services/qa.service';
 import { ToastService } from '../../core/services/toast.service';
 import { PendingQuestionVM, SuggestionItemVM } from '../../core/models/assistant.models';
+import { QaRecord, MatcherTestResult } from '../../core/models/qa.models';
 
 @Component({
   selector: 'app-live-qa',
@@ -25,6 +26,18 @@ export class LiveQaComponent {
   selectedOccurrences: { [key: string]: string } = {};
   suggestionAnswerTexts: { [key: string | number]: string } = {};
   editingSuggestions: { [key: string | number]: boolean } = {};
+
+  // Auto-Responder Keyword System State
+  showAutoResponderForm = false;
+  editingTriggerId: string | null = null;
+  triggerTitle = '';
+  triggerKeywords = '';
+  triggerAnswer = '';
+  triggerAutoReply = true;
+
+  testInputText = '';
+  testResult: MatcherTestResult | null = null;
+  testingMatcher = false;
 
   pendingKeys = computed(() => {
     const questions = this.assistant.pendingQuestions();
@@ -133,6 +146,88 @@ export class LiveQaComponent {
         delete this.suggestionAnswerTexts[sugg.id];
         delete this.editingSuggestions[sugg.id];
         this.assistant.dismissSuggestion(sugg.id).subscribe();
+      }
+    });
+  }
+
+  // --- Auto-Responder Keyword System Methods (100% Real-Time Dynamic) ---
+
+  onQuickAddTriggerFromPending(displayText: string, key: string) {
+    const answer = this.answerTexts[key] || '';
+    this.editingTriggerId = null;
+    this.triggerTitle = displayText;
+    this.triggerAnswer = answer;
+    // Derive initial keywords dynamically from real-time question phrasing
+    const words = displayText.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+    this.triggerKeywords = [displayText, words.join(' ')].filter((v, i, a) => v && a.indexOf(v) === i).join(', ');
+    this.triggerAutoReply = true;
+    this.showAutoResponderForm = true;
+  }
+
+  onSaveCustomKeywordTrigger() {
+    if (!this.triggerTitle || !this.triggerTitle.trim()) {
+      this.toast.error('Validation Error', 'Trigger title/question is required');
+      return;
+    }
+    if (!this.triggerAnswer || !this.triggerAnswer.trim()) {
+      this.toast.error('Validation Error', 'Response answer text is required');
+      return;
+    }
+    const kwList = this.triggerKeywords
+      .split(',')
+      .map(k => k.trim())
+      .filter(k => k.length > 0);
+
+    this.qa.saveMemory(
+      this.triggerTitle.trim(),
+      this.triggerAnswer.trim(),
+      this.triggerAutoReply,
+      kwList,
+      this.editingTriggerId || undefined
+    ).subscribe({
+      next: () => {
+        this.resetTriggerForm();
+      }
+    });
+  }
+
+  onEditTrigger(record: QaRecord) {
+    this.editingTriggerId = record.id;
+    this.triggerTitle = record.normalized_question || '';
+    this.triggerAnswer = record.answer_text || '';
+    this.triggerKeywords = (record.original_question_examples || record.example_phrasings || []).join(', ');
+    this.triggerAutoReply = record.auto_reply !== false;
+    this.showAutoResponderForm = true;
+  }
+
+  onDeleteTrigger(recordId: string) {
+    if (confirm('Are you sure you want to delete this auto-responder keyword trigger?')) {
+      this.qa.deleteMemory(recordId);
+    }
+  }
+
+  resetTriggerForm() {
+    this.editingTriggerId = null;
+    this.triggerTitle = '';
+    this.triggerKeywords = '';
+    this.triggerAnswer = '';
+    this.triggerAutoReply = true;
+    this.showAutoResponderForm = false;
+  }
+
+  onTestKeywordDetection() {
+    if (!this.testInputText || !this.testInputText.trim()) {
+      this.toast.error('Validation Error', 'Enter sample chat message to test detection');
+      return;
+    }
+    this.testingMatcher = true;
+    this.qa.testMatcher(this.testInputText.trim()).subscribe({
+      next: (res) => {
+        this.testingMatcher = false;
+        this.testResult = res;
+      },
+      error: () => {
+        this.testingMatcher = false;
       }
     });
   }

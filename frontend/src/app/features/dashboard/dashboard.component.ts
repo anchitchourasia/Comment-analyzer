@@ -66,11 +66,21 @@ export class DashboardComponent {
   }
 
   onStartAssistant() {
-    if (!this.activeLiveChatId) return;
+    const liveChatId = this.activeLiveChatId || this.assistant.status().live_chat_id;
+    const videoId = this.videoInput || this.assistant.status().video_id || '';
+    if (!liveChatId) {
+      this.toast.error('Connection Error', 'Please connect a live stream video ID first');
+      return;
+    }
     this.starting = true;
-    this.assistant.startAssistant(this.videoInput, this.activeLiveChatId).subscribe({
-      next: () => this.starting = false,
-      error: () => this.starting = false
+    this.assistant.startAssistant(videoId, liveChatId).subscribe({
+      next: () => {
+        this.starting = false;
+        this.assistant.fetchStatus();
+      },
+      error: () => {
+        this.starting = false;
+      }
     });
   }
 
@@ -85,6 +95,7 @@ export class DashboardComponent {
         this.videoInput = '';
         this.answerTexts = {};
         this.selectedOccurrences = {};
+        this.assistant.fetchStatus();
       },
       error: () => {
         this.stopping = false;
@@ -94,6 +105,7 @@ export class DashboardComponent {
         this.videoInput = '';
         this.answerTexts = {};
         this.selectedOccurrences = {};
+        this.assistant.fetchStatus();
       }
     });
   }
