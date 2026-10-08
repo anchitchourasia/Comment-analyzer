@@ -38,7 +38,7 @@ export class QaService {
       .subscribe();
   }
 
-  saveMemory(question: string, answer: string, autoReply = false) {
+  saveMemory(question: string, answer: string, autoReply = false, keywords: string[] = []) {
     if (!question || !question.trim() || !answer || !answer.trim()) {
       this.toast.error('Validation Error', 'Both question and answer text are required');
       return throwError(() => new Error('Question and answer text are required'));
@@ -48,6 +48,7 @@ export class QaService {
         question: question.trim(),
         answer: answer.trim(),
         auto_reply: autoReply,
+        keywords: keywords
       })
       .pipe(
         tap(() => {

@@ -50,6 +50,8 @@ export interface SuggestionItemDto {
   record_id?: string | null;
   live_chat_id?: string | null;
   message_id?: string | null;
+  auto_reply?: boolean;
+  is_keyword_trigger?: boolean;
 }
 
 export interface SuggestionsResponseDto {
@@ -141,6 +143,8 @@ export interface SuggestionItemVM {
   recordId?: string;
   liveChatId?: string;
   messageId?: string;
+  autoReply?: boolean;
+  isKeywordTrigger?: boolean;
 }
 
 export interface SuperchatAlertVM {
@@ -213,7 +217,9 @@ export function mapSuggestion(dto: SuggestionItemDto): SuggestionItemVM {
     confidenceCategory: category,
     recordId: dto.record_id || undefined,
     liveChatId: dto.live_chat_id || undefined,
-    messageId: dto.message_id || undefined
+    messageId: dto.message_id || undefined,
+    autoReply: dto.auto_reply !== undefined ? dto.auto_reply : (score >= 0.8),
+    isKeywordTrigger: dto.is_keyword_trigger !== undefined ? dto.is_keyword_trigger : (score >= 0.8)
   };
 }
 

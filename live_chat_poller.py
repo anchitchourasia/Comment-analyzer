@@ -148,7 +148,7 @@ class AssistantState:
                 "display_string": display_string,  # live only for superchats
             })
 
-    def add_suggestion(self, question, answer, score, author, record_id=None, live_chat_id=None, message_id=None):
+    def add_suggestion(self, question, answer, score, author, record_id=None, live_chat_id=None, message_id=None, auto_reply=False, is_keyword_trigger=False):
         with self.lock:
             # don't stack the same question+answer every poll cycle
             if any(s["question"] == question and s["answer"] == answer
@@ -165,6 +165,8 @@ class AssistantState:
                 "record_id": record_id,
                 "live_chat_id": live_chat_id,
                 "message_id": message_id,
+                "auto_reply": auto_reply,
+                "is_keyword_trigger": is_keyword_trigger,
             })
             del self.suggestions[SUGGESTION_CAP:]
 
@@ -282,11 +284,11 @@ def process_message(state, author_name, author_channel_id, text, poster,
         return
     if generation is not None and state.generation != generation:
         return
-    if not is_question(text):
-        return
 
     ch_id = getattr(state, "channel_id", "") or None
     v_id = getattr(state, "video_id", "") or None
+
+    # First check keyword trigger match in Q&A Memory Bank
     match, score = qa_engine.find_best_answer(
         text, qa_data=qa_engine.load_qa_data(channel_id=ch_id), channel_id=ch_id
     )
@@ -295,7 +297,7 @@ def process_message(state, author_name, author_channel_id, text, poster,
     record_id = match["id"] if match else None
 
     # Groq AI Model Integration: Grounded RAG verification against memory bank
-    if groq_service.get_api_key():
+    if groq_service.get_api_key() and answer_text:
         try:
             records = qa_engine.load_qa_data(channel_id=ch_id)
             ai_res = groq_service.review_question(text, suggested_answer=answer_text, records=records)
@@ -306,19 +308,30 @@ def process_message(state, author_name, author_channel_id, text, poster,
         except Exception:
             pass
 
-    if (match and answer_text and score >= AUTO_REPLY_SCORE
-            and match.get("auto_reply") and state.auto_reply and poster is not None):
-        if poster.post_answer(
-            answer_text, state.live_chat_id, record_id=record_id
-        ):
-            if record_id:
-                qa_engine.mark_used(record_id, channel_id=ch_id)
-        return
+    is_kw = bool(match)
+    is_auto = bool(match.get("auto_reply")) if match else False
+
+    # Keyword Trigger Auto-Reply: Trigger auto-posting first if rule has auto_reply enabled
+    if match and answer_text and score >= AUTO_REPLY_SCORE and is_auto:
+        if poster is not None:
+            posted = poster.post_answer(
+                answer_text, state.live_chat_id, record_id=record_id
+            )
+            if posted:
+                if record_id:
+                    qa_engine.mark_used(record_id, channel_id=ch_id)
+                return
+
+    # If no keyword trigger auto-posted, check if message is a question or suggestion match
+    if not match or score < SUGGEST_SCORE:
+        if not is_question(text):
+            return
 
     if answer_text and score >= SUGGEST_SCORE:
         state.add_suggestion(
             text, answer_text, score, author_name,
-            record_id=record_id, live_chat_id=state.live_chat_id, message_id=message_id
+            record_id=record_id, live_chat_id=state.live_chat_id, message_id=message_id,
+            auto_reply=is_auto, is_keyword_trigger=is_kw
         )
         return
 

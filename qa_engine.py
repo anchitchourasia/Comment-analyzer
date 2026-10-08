@@ -262,7 +262,7 @@ def _remember_example(record, question):
 
 
 def add_question_answer(question, answer, auto_reply=False,
-                        status="approved", qa_data=None, channel_id=None):
+                        status="approved", qa_data=None, channel_id=None, keywords=None):
     """Create or update (dedup by normalized question) one memory record
     in the current session's temporary memory or channel store."""
     normalized = normalize_text(question)
@@ -275,6 +275,18 @@ def add_question_answer(question, answer, auto_reply=False,
     if status not in ("approved", "draft"):
         raise ValueError("status must be 'approved' or 'draft'.")
 
+    # Clean and gather initial examples/keywords
+    kw_list = []
+    if isinstance(keywords, list):
+        kw_list = [str(k).strip() for k in keywords if str(k).strip()]
+    elif isinstance(keywords, str) and keywords.strip():
+        kw_list = [str(k).strip() for k in keywords.split(",") if str(k).strip()]
+    
+    examples = [str(question).strip()]
+    for k in kw_list:
+        if k and k not in examples:
+            examples.append(k)
+
     with QA_LOCK:
         data = qa_data if qa_data is not None else load_qa_data(channel_id=channel_id)
 
@@ -285,13 +297,15 @@ def add_question_answer(question, answer, auto_reply=False,
                 record["auto_reply"] = bool(auto_reply)
                 record["updated_at"] = now_iso()
                 _remember_example(record, question)
+                for k in kw_list:
+                    _remember_example(record, k)
                 save_qa_data(data, channel_id=channel_id)
                 return record
 
         record = {
             "id": _new_id(),
             "normalized_question": normalized,
-            "original_question_examples": [str(question).strip()],
+            "original_question_examples": examples[:MAX_EXAMPLES],
             "answer_text": clean_answer,
             "status": status,
             "auto_reply": bool(auto_reply),
@@ -369,7 +383,6 @@ def find_best_answer(question, qa_data=None, include_drafts=False, channel_id=No
     if qa_data is None:
         qa_data = load_qa_data(channel_id=channel_id)
 
-
     normalized = normalize_text(question)
     if not normalized:
         return None, 0.0
@@ -388,8 +401,18 @@ def find_best_answer(question, qa_data=None, include_drafts=False, channel_id=No
 
         cand_scores = [calculate_score(normalized, stored)]
         for ex in record.get("original_question_examples", []):
-            if ex:
-                cand_scores.append(calculate_score(question, ex))
+            if not ex:
+                continue
+            norm_ex = normalize_text(ex)
+            if norm_ex:
+                if normalized == norm_ex:
+                    cand_scores.append(1.0)
+                elif norm_ex in normalized:
+                    # Direct keyword match substring (e.g. "pc specs" in "what is your pc specs")
+                    cand_scores.append(1.0)
+                elif len(norm_ex) >= 4 and normalized in norm_ex:
+                    cand_scores.append(0.9)
+            cand_scores.append(calculate_score(question, ex))
 
         score = max(cand_scores)
         if score > best_score:
@@ -397,3 +420,4 @@ def find_best_answer(question, qa_data=None, include_drafts=False, channel_id=No
             best_score = score
 
     return best_match, best_score
+

@@ -1118,8 +1118,9 @@ async def get_qa_memory(user: UserSessionModel = Depends(get_optional_user)):
 @router.post("/api/qa/memory")
 async def save_qa_memory(payload: QaMemoryCreateRequest, user: UserSessionModel = Depends(get_optional_user)):
     ch_id = user.selected_channel_id
+    kw = payload.keywords or payload.examples
     record = qa_engine.add_question_answer(
-        payload.question, payload.answer, auto_reply=payload.auto_reply, channel_id=ch_id
+        payload.question, payload.answer, auto_reply=payload.auto_reply, channel_id=ch_id, keywords=kw
     )
     return {"status": "saved", "record": record}
 

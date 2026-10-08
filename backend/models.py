@@ -110,6 +110,8 @@ class QaMemoryCreateRequest(BaseModel):
     question: str
     answer: str
     auto_reply: bool = True
+    keywords: Optional[list[str]] = None
+    examples: Optional[list[str]] = None
 
 class QaTestMatcherRequest(BaseModel):
     question: str

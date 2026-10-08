@@ -288,7 +288,12 @@
             @for (sugg of assistant.highConfidenceSuggestions(); track sugg.id) {
               <div class="suggestion-card glass-card">
                 <div class="sugg-header">
-                  <span class="user-ask">"{{ sugg.questionText }}"</span>
+                  <div class="sugg-header-left">
+                    <span class="user-ask">"{{ sugg.questionText }}"</span>
+                    @if (sugg.autoReply || sugg.isKeywordTrigger) {
+                      <span class="badge-keyword-trigger">🤖 KEYWORD TRIGGER (Auto-Sending Live)</span>
+                    }
+                  </div>
                   <span class="confidence-score high">Score: {{ sugg.scorePercentage }}%</span>
                 </div>
 
@@ -332,7 +337,7 @@
                       (click)="onPostSuggestion(sugg)"
                       [disabled]="assistant.postingQuestionKey() === (sugg.recordId || sugg.questionText)"
                     >
-                      🚀 Post Response
+                      {{ (sugg.autoReply || sugg.isKeywordTrigger) ? '⚡ Auto-Send Live Chat' : '🚀 Post Response' }}
                     </button>
                   </div>
                 </div>

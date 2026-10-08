@@ -1,4 +1,4 @@
-import { Component, inject, computed } from '@angular/core';
+import { Component, inject, computed, effect } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { RouterLink } from '@angular/router';
@@ -26,6 +26,19 @@ export class LiveQaComponent {
   selectedOccurrences: { [key: string]: string } = {};
   suggestionAnswerTexts: { [key: string | number]: string } = {};
   editingSuggestions: { [key: string | number]: boolean } = {};
+  autoSendTriggered: { [key: string | number]: boolean } = {};
+
+  constructor() {
+    effect(() => {
+      const highConf = this.assistant.highConfidenceSuggestions();
+      highConf.forEach((sugg) => {
+        if ((sugg.autoReply || sugg.isKeywordTrigger) && !this.autoSendTriggered[sugg.id]) {
+          this.autoSendTriggered[sugg.id] = true;
+          this.onPostSuggestion(sugg);
+        }
+      });
+    });
+  }
 
   // Auto-Responder Keyword System State
   showAutoResponderForm = false;
@@ -182,8 +195,7 @@ export class LiveQaComponent {
       this.triggerTitle.trim(),
       this.triggerAnswer.trim(),
       this.triggerAutoReply,
-      kwList,
-      this.editingTriggerId || undefined
+      kwList
     ).subscribe({
       next: () => {
         this.resetTriggerForm();
@@ -202,7 +214,7 @@ export class LiveQaComponent {
 
   onDeleteTrigger(recordId: string) {
     if (confirm('Are you sure you want to delete this auto-responder keyword trigger?')) {
-      this.qa.deleteMemory(recordId);
+      this.qa.deleteMemory(recordId).subscribe();
     }
   }
 

@@ -50,7 +50,7 @@ export class QaLibraryComponent {
 
   onDeleteRecord(id: string) {
     if (confirm('Are you sure you want to delete this pre-approved Q&A record?')) {
-      this.qaService.deleteMemory(id);
+      this.qaService.deleteMemory(id).subscribe();
     }
   }
 
