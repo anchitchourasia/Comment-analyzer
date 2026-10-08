@@ -57,6 +57,12 @@
             <small class="form-help">Matches any incoming live chat containing these keywords.</small>
           </div>
 
+          <div class="form-group">
+            <label>Cooldown Period (Seconds):</label>
+            <input type="number" class="input-glass" [(ngModel)]="triggerCooldown" min="0" placeholder="e.g. 60" />
+            <small class="form-help">Prevents spamming: auto-trigger will wait this time before replying again.</small>
+          </div>
+
           <div class="form-group full-width">
             <label>Saved Auto-Response Text (Sent directly to YouTube Live Chat):</label>
             <textarea class="input-glass answer-textarea" rows="2" [(ngModel)]="triggerAnswer" placeholder="e.g. PC Specs: RTX 4090 GPU, Intel i9-14900K CPU, 64GB DDR5 RAM..."></textarea>
@@ -91,9 +97,12 @@
           <div class="trigger-card glass-card">
             <div class="trigger-card-header">
               <span class="trigger-title">❓ {{ record.normalized_question | uppercase }}</span>
-              <span class="auto-badge" [class.enabled]="record.auto_reply">
-                {{ record.auto_reply ? '⚡ Auto-Posting ON' : '⏸️ Manual' }}
-              </span>
+              <div class="trigger-header-badges">
+                <span class="cooldown-badge">⏱️ {{ record.cooldown_seconds !== undefined && record.cooldown_seconds !== null ? record.cooldown_seconds : 60 }}s Cooldown</span>
+                <span class="auto-badge" [class.enabled]="record.auto_reply">
+                  {{ record.auto_reply ? '⚡ Auto-Posting ON' : '⏸️ Manual' }}
+                </span>
+              </div>
             </div>
 
             <div class="keywords-wrap">

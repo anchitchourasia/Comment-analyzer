@@ -274,6 +274,43 @@ def negative_share(messages):
 
 # --- question routing -------------------------------------------------------------
 
+def is_record_on_cooldown(channel_id, record_id, cooldown_seconds=60):
+    if not record_id:
+        return False
+    cooldown_path = storage.get_cooldown_path(channel_id)
+    if not cooldown_path.exists():
+        return False
+    try:
+        with storage.interprocess_file_lock(cooldown_path):
+            data = json.loads(cooldown_path.read_text(encoding="utf-8"))
+            last = data.get("per_record", {}).get(record_id)
+            if last is None:
+                return False
+            return (time.time() - last) < cooldown_seconds
+    except Exception:
+        return False
+
+def record_post_cooldown(channel_id, record_id):
+    if not record_id:
+        return
+    cooldown_path = storage.get_cooldown_path(channel_id)
+    try:
+        with storage.interprocess_file_lock(cooldown_path):
+            data = {}
+            if cooldown_path.exists():
+                try:
+                    data = json.loads(cooldown_path.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+            per_rec = data.get("per_record", {})
+            now = time.time()
+            per_rec[record_id] = now
+            data["per_record"] = per_rec
+            data["last_post_time"] = now
+            atomic_write_json(cooldown_path, data)
+    except Exception:
+        pass
+
 
 def process_message(state, author_name, author_channel_id, text, poster,
                     generation=None, message_id=None):
@@ -310,17 +347,25 @@ def process_message(state, author_name, author_channel_id, text, poster,
 
     is_kw = bool(match)
     is_auto = bool(match.get("auto_reply")) if match else False
+    cooldown_sec = match.get("cooldown_seconds", 60) if match else 60
 
     # Keyword Trigger Auto-Reply: Trigger auto-posting first if rule has auto_reply enabled
     if match and answer_text and score >= AUTO_REPLY_SCORE and is_auto:
         if poster is not None:
             posted = poster.post_answer(
-                answer_text, state.live_chat_id, record_id=record_id
+                answer_text, state.live_chat_id, record_id=record_id, cooldown_seconds=cooldown_sec
             )
             if posted:
                 if record_id:
                     qa_engine.mark_used(record_id, channel_id=ch_id)
+            return
+        else:
+            if is_record_on_cooldown(ch_id, record_id, cooldown_sec):
                 return
+            record_post_cooldown(ch_id, record_id)
+            if record_id:
+                qa_engine.mark_used(record_id, channel_id=ch_id)
+            return
 
     # If no keyword trigger auto-posted, check if message is a question or suggestion match
     if not match or score < SUGGEST_SCORE:

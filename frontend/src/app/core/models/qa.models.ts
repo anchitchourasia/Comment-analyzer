@@ -5,6 +5,7 @@ export interface QaRecord {
   example_phrasings?: string[];
   original_question_examples?: string[];
   auto_reply: boolean;
+  cooldown_seconds?: number;
   created_at?: string;
   usage_count?: number;
 }

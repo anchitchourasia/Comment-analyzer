@@ -27,7 +27,7 @@ class PostRequest(BaseModel):
     question_key: Optional[str] = None
     occurrence_id: Optional[str] = None
     live_chat_id: Optional[str] = None
-    auto_reply_opt_in: bool = True
+    auto_reply_opt_in: bool = False
     record_id: Optional[str] = None
 
 class PostResponse(BaseModel):
@@ -112,6 +112,7 @@ class QaMemoryCreateRequest(BaseModel):
     auto_reply: bool = True
     keywords: Optional[list[str]] = None
     examples: Optional[list[str]] = None
+    cooldown_seconds: Optional[int] = 60
 
 class QaTestMatcherRequest(BaseModel):
     question: str

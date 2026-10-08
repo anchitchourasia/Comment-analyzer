@@ -47,6 +47,7 @@ export class LiveQaComponent {
   triggerKeywords = '';
   triggerAnswer = '';
   triggerAutoReply = true;
+  triggerCooldown = 60;
 
   testInputText = '';
   testResult: MatcherTestResult | null = null;
@@ -75,14 +76,10 @@ export class LiveQaComponent {
   }
 
   onSaveApproveOnly(question: string, answer: string, key: string) {
-    if (!answer) {
-      this.toast.error('Validation Error', 'Answer text cannot be empty');
-      return;
-    }
-    this.qa.saveMemory(question, answer).subscribe({
+    delete this.answerTexts[key];
+    this.assistant.dismissPending(key).subscribe({
       next: () => {
-        delete this.answerTexts[key];
-        this.assistant.dismissPending(key).subscribe();
+        this.toast.success('Question Approved', 'Question removed from queue');
       }
     });
   }
@@ -174,6 +171,7 @@ export class LiveQaComponent {
     const words = displayText.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
     this.triggerKeywords = [displayText, words.join(' ')].filter((v, i, a) => v && a.indexOf(v) === i).join(', ');
     this.triggerAutoReply = true;
+    this.triggerCooldown = 60;
     this.showAutoResponderForm = true;
   }
 
@@ -191,11 +189,14 @@ export class LiveQaComponent {
       .map(k => k.trim())
       .filter(k => k.length > 0);
 
+    const cooldownVal = this.triggerCooldown !== undefined && this.triggerCooldown !== null ? Math.max(0, Number(this.triggerCooldown)) : 60;
+
     this.qa.saveMemory(
       this.triggerTitle.trim(),
       this.triggerAnswer.trim(),
       this.triggerAutoReply,
-      kwList
+      kwList,
+      cooldownVal
     ).subscribe({
       next: () => {
         this.resetTriggerForm();
@@ -209,6 +210,7 @@ export class LiveQaComponent {
     this.triggerAnswer = record.answer_text || '';
     this.triggerKeywords = (record.original_question_examples || record.example_phrasings || []).join(', ');
     this.triggerAutoReply = record.auto_reply !== false;
+    this.triggerCooldown = record.cooldown_seconds !== undefined && record.cooldown_seconds !== null ? record.cooldown_seconds : 60;
     this.showAutoResponderForm = true;
   }
 
@@ -224,6 +226,7 @@ export class LiveQaComponent {
     this.triggerKeywords = '';
     this.triggerAnswer = '';
     this.triggerAutoReply = true;
+    this.triggerCooldown = 60;
     this.showAutoResponderForm = false;
   }
 

@@ -420,8 +420,12 @@ async def post_to_channel(
                     entry["error"] = None
                     if pending_path:
                         qa_engine.atomic_write_json(pending_path, pending)
-                    qa_engine.add_question_answer(entry["examples"][0], answer_text, auto_reply=payload.auto_reply_opt_in, channel_id=authorized_ch)
+                    if payload.auto_reply_opt_in:
+                        qa_engine.add_question_answer(entry["examples"][0], answer_text, auto_reply=True, channel_id=authorized_ch)
                     poller.remove_pending(question_key, channel_id=authorized_ch)
+
+        if payload.record_id:
+            poller.record_post_cooldown(authorized_ch, payload.record_id)
 
         if active_state:
             active_state.add_message(
@@ -545,7 +549,8 @@ async def post_to_channel(
                     entry["error"] = None
                     if pending_path:
                         qa_engine.atomic_write_json(pending_path, pending)
-                    qa_engine.add_question_answer(entry["examples"][0], answer_text, auto_reply=payload.auto_reply_opt_in, channel_id=authorized_ch)
+                    if payload.auto_reply_opt_in:
+                        qa_engine.add_question_answer(entry["examples"][0], answer_text, auto_reply=True, channel_id=authorized_ch)
                     poller.remove_pending(question_key, channel_id=authorized_ch)
 
         return PostResponse(
@@ -1120,7 +1125,7 @@ async def save_qa_memory(payload: QaMemoryCreateRequest, user: UserSessionModel 
     ch_id = user.selected_channel_id
     kw = payload.keywords or payload.examples
     record = qa_engine.add_question_answer(
-        payload.question, payload.answer, auto_reply=payload.auto_reply, channel_id=ch_id, keywords=kw
+        payload.question, payload.answer, auto_reply=payload.auto_reply, channel_id=ch_id, keywords=kw, cooldown_seconds=payload.cooldown_seconds
     )
     return {"status": "saved", "record": record}
 

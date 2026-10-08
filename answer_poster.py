@@ -82,21 +82,22 @@ class AnswerPoster:
         except Exception:
             pass
 
-    def cooldown_active(self, record_id):
+    def cooldown_active(self, record_id, cooldown_seconds=None):
         with self._post_lock:
             self._load_cooldown_locked()
-            return self._cooldown_active_locked(record_id)
+            return self._cooldown_active_locked(record_id, cooldown_seconds=cooldown_seconds)
 
-    def _cooldown_active_locked(self, record_id):
+    def _cooldown_active_locked(self, record_id, cooldown_seconds=None):
         last = self._last_posted_at.get(record_id)
         if last is None:
             return False
-        return (time.time() - last) < POST_COOLDOWN_SECONDS
+        c_sec = POST_COOLDOWN_SECONDS if cooldown_seconds is None else max(0, float(cooldown_seconds))
+        return (time.time() - last) < c_sec
 
-    def post_answer(self, answer_text, live_chat_id, record_id=None):
+    def post_answer(self, answer_text, live_chat_id, record_id=None, cooldown_seconds=None):
         with self._post_lock:
             self._load_cooldown_locked()
-            if record_id is not None and self._cooldown_active_locked(record_id):
+            if record_id is not None and self._cooldown_active_locked(record_id, cooldown_seconds=cooldown_seconds):
                 return False
 
             now = time.time()

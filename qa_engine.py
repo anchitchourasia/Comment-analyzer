@@ -195,6 +195,12 @@ def _to_v2(item):
     if status not in ("approved", "draft"):
         status = "approved"
 
+    cooldown_sec = item.get("cooldown_seconds")
+    if cooldown_sec is None or not isinstance(cooldown_sec, (int, float)):
+        cooldown_sec = 60
+    else:
+        cooldown_sec = max(0, int(cooldown_sec))
+
     return {
         "id": str(item.get("id") or _new_id()),
         "normalized_question": normalized,
@@ -202,6 +208,7 @@ def _to_v2(item):
         "answer_text": answer,
         "status": status,
         "auto_reply": bool(item.get("auto_reply", False)),
+        "cooldown_seconds": cooldown_sec,
         "usage_count": int(item.get("usage_count", 0) or 0),
         "created_at": item.get("created_at") or now_iso(),
         "updated_at": item.get("updated_at") or item.get("created_at") or now_iso(),
@@ -262,11 +269,13 @@ def _remember_example(record, question):
 
 
 def add_question_answer(question, answer, auto_reply=False,
-                        status="approved", qa_data=None, channel_id=None, keywords=None):
+                        status="approved", qa_data=None, channel_id=None, keywords=None,
+                        cooldown_seconds=60):
     """Create or update (dedup by normalized question) one memory record
     in the current session's temporary memory or channel store."""
     normalized = normalize_text(question)
     clean_answer = str(answer).strip()
+    c_sec = 60 if cooldown_seconds is None else max(0, int(cooldown_seconds))
 
     if not normalized:
         raise ValueError("Question cannot be empty.")
@@ -295,6 +304,7 @@ def add_question_answer(question, answer, auto_reply=False,
                 record["answer_text"] = clean_answer
                 record["status"] = status
                 record["auto_reply"] = bool(auto_reply)
+                record["cooldown_seconds"] = c_sec
                 record["updated_at"] = now_iso()
                 _remember_example(record, question)
                 for k in kw_list:
@@ -309,6 +319,7 @@ def add_question_answer(question, answer, auto_reply=False,
             "answer_text": clean_answer,
             "status": status,
             "auto_reply": bool(auto_reply),
+            "cooldown_seconds": c_sec,
             "usage_count": 0,
             "created_at": now_iso(),
             "updated_at": now_iso(),
