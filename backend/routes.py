@@ -23,6 +23,7 @@ import live_chat_poller as poller
 import qa_engine
 import answer_poster
 import groq_service
+import pinecone_store
 from livechat_id_generator import get_live_chat_id, get_video_details
 
 
@@ -353,9 +354,15 @@ async def post_to_channel(
                                 in_flight_dt = datetime.fromisoformat(in_flight_at_str)
                                 now_dt = datetime.now(timezone.utc)
                                 if (now_dt - in_flight_dt).total_seconds() < 15:
-                                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Posting currently in progress for this question.")
+                                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Posting already in progress or completed.")
+                            except HTTPException:
+                                raise
                             except Exception:
                                 pass
+                        else:
+                            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Posting already in progress or completed.")
+                    elif curr_status == "outcome_unknown":
+                        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Delivery outcome is unknown. Please check your YouTube live chat.")
 
                     occurrences = entry.get("occurrences", [])
                     if payload.occurrence_id:
@@ -420,8 +427,7 @@ async def post_to_channel(
                     entry["error"] = None
                     if pending_path:
                         qa_engine.atomic_write_json(pending_path, pending)
-                    if payload.auto_reply_opt_in:
-                        qa_engine.add_question_answer(entry["examples"][0], answer_text, auto_reply=True, channel_id=authorized_ch)
+                    qa_engine.add_question_answer(entry["examples"][0], answer_text, auto_reply=payload.auto_reply_opt_in, channel_id=authorized_ch)
                     poller.remove_pending(question_key, channel_id=authorized_ch)
 
         if payload.record_id:
@@ -549,8 +555,7 @@ async def post_to_channel(
                     entry["error"] = None
                     if pending_path:
                         qa_engine.atomic_write_json(pending_path, pending)
-                    if payload.auto_reply_opt_in:
-                        qa_engine.add_question_answer(entry["examples"][0], answer_text, auto_reply=True, channel_id=authorized_ch)
+                    qa_engine.add_question_answer(entry["examples"][0], answer_text, auto_reply=payload.auto_reply_opt_in, channel_id=authorized_ch)
                     poller.remove_pending(question_key, channel_id=authorized_ch)
 
         return PostResponse(
@@ -1111,6 +1116,27 @@ async def generate_ai_draft(payload: AiDraftRequest, user: UserSessionModel = De
         answer=result.get("answer", ""),
         note=result.get("note", "")
     )
+
+# --- PINECONE STATUS ENDPOINT ---
+
+@router.get("/api/pinecone/status")
+async def get_pinecone_status(user: UserSessionModel = Depends(get_optional_user)):
+    """Return Pinecone connectivity and index stats for the current channel.
+
+    Angular frontend uses this to display a live storage-backend badge.
+    Response shape:
+      {
+        "available": bool,
+        "index_name": str,
+        "namespace": str,
+        "vector_count": int | "?",
+        "dimension": int,
+        "error": str | null   # only present when available=false
+      }
+    """
+    ch_id = user.selected_channel_id if user else None
+    stats = pinecone_store.get_index_stats(channel_id=ch_id)
+    return stats
 
 # --- Q&A MEMORY BANK ENDPOINTS ---
 

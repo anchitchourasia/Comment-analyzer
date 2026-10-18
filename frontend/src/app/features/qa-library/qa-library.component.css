@@ -21,6 +21,54 @@
   margin-top: 2px;
 }
 
+/* Pinecone storage status badge */
+.pinecone-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.82rem;
+  padding: 8px 14px;
+  border-radius: 8px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+.pinecone-badge code {
+  font-size: 0.78rem;
+  background: rgba(255,255,255,0.08);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+.pinecone-ok {
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  color: #6ee7b7;
+}
+.pinecone-err {
+  background: rgba(245, 158, 11, 0.10);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fcd34d;
+}
+.badge-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+  flex-shrink: 0;
+}
+.badge-dot--green {
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+  animation: pulse-green 2s infinite;
+}
+.badge-dot--amber {
+  background: #f59e0b;
+  box-shadow: 0 0 6px #f59e0b;
+}
+@keyframes pulse-green {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 .toolbar {
   display: flex;
   justify-content: space-between;

@@ -24,3 +24,13 @@ export interface AiDraftResult {
   answer: string;
   note: string;
 }
+
+/** Shape returned by GET /api/pinecone/status */
+export interface PineconeStatus {
+  available: boolean;
+  index_name?: string;
+  namespace?: string;
+  vector_count?: number | string;
+  dimension?: number;
+  error?: string;
+}

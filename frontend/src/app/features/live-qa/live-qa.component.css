@@ -646,3 +646,450 @@
   font-size: 0.85rem;
   color: #f1f5f9;
 }
+
+/* --- Highlight Pulse Animation for Trigger Card Scrolling --- */
+.trigger-card.highlight-pulse {
+  animation: triggerGlow 1s ease-in-out infinite alternate;
+  border-color: #38bdf8 !important;
+  box-shadow: 0 0 25px rgba(56, 189, 248, 0.6) !important;
+}
+
+@keyframes triggerGlow {
+  0% { transform: scale(1); }
+  100% { transform: scale(1.02); }
+}
+
+/* --- Queue Section Sorting Pills --- */
+.queue-sort-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(15, 23, 42, 0.6);
+  padding: 3px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.sort-pill-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 0.72rem;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.sort-pill-btn:hover {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.sort-pill-btn.active {
+  background: rgba(56, 189, 248, 0.2);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.4);
+}
+
+/* --- Frequent Questions Analysis Panel Styles --- */
+.frequent-analysis-panel {
+  padding: 22px;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: radial-gradient(circle at top left, rgba(245, 158, 11, 0.08), rgba(15, 23, 42, 0.85));
+}
+
+.badge-fire {
+  background: linear-gradient(135deg, #f59e0b, #ef4444) !important;
+  color: #fff !important;
+  font-weight: 800;
+}
+
+.freq-panel-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.frequent-filter-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.35);
+  padding: 3px 6px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.filter-pill-btn {
+  background: transparent;
+  border: none;
+  color: #94a3b8;
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 5px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.filter-pill-btn:hover {
+  color: #f1f5f9;
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.filter-pill-btn.active {
+  background: rgba(245, 158, 11, 0.25);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+}
+
+.toggle-analysis-btn {
+  font-size: 0.75rem;
+  padding: 5px 12px;
+  font-weight: 700;
+}
+
+.analysis-notice {
+  font-size: 0.8rem;
+  color: #cbd5e1;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  padding: 10px 14px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  line-height: 1.4;
+}
+
+/* Frequent Metrics Row */
+.frequent-metrics-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.freq-metric-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  padding: 12px 16px;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+}
+
+.freq-metric-card:hover {
+  border-color: rgba(245, 158, 11, 0.4);
+  transform: translateY(-2px);
+}
+
+.freq-metric-card.highlight {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.12), rgba(15, 23, 42, 0.8));
+}
+
+.freq-metric-card .fm-icon {
+  font-size: 1.8rem;
+}
+
+.freq-metric-card .fm-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.freq-metric-card .fm-value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #f8fafc;
+}
+
+.freq-metric-card.highlight .fm-value {
+  color: #f87171;
+}
+
+.freq-metric-card .fm-label {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 220px;
+}
+
+/* Empty State */
+.empty-freq-state {
+  text-align: center;
+  padding: 30px 20px;
+  color: #94a3b8;
+}
+
+.empty-freq-state .empty-icon {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: 8px;
+}
+
+/* Frequent Question Cards Grid */
+.freq-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .freq-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.freq-card {
+  padding: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(15, 23, 42, 0.8);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+  transition: all 0.2s ease;
+}
+
+.freq-card:hover {
+  border-color: rgba(245, 158, 11, 0.4);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+
+.freq-card.is-top-one {
+  border-color: rgba(245, 158, 11, 0.5);
+  box-shadow: 0 0 15px rgba(245, 158, 11, 0.2);
+}
+
+.freq-card.is-covered {
+  border-left: 4px solid #10b981;
+}
+
+.freq-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+}
+
+.rank-badge {
+  font-size: 0.75rem;
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 8px;
+  background: rgba(148, 163, 184, 0.2);
+  color: #cbd5e1;
+  letter-spacing: 0.04em;
+}
+
+.rank-badge.rank-gold {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+}
+
+.rank-badge.rank-silver {
+  background: linear-gradient(135deg, #94a3b8, #64748b);
+  color: #fff;
+}
+
+.rank-badge.rank-bronze {
+  background: linear-gradient(135deg, #b45309, #78350f);
+  color: #fff;
+}
+
+.freq-badges-right {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.ask-freq-pill {
+  font-size: 0.72rem;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(239, 68, 68, 0.18);
+  color: #f87171;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.pct-pill {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+}
+
+.ar-status-pill {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
+.ar-status-pill.active {
+  background: rgba(16, 185, 129, 0.2);
+  color: #34d399;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+}
+
+.ar-status-pill.missing {
+  background: rgba(148, 163, 184, 0.15);
+  color: #94a3b8;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.freq-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.freq-question-title {
+  font-size: 0.95rem;
+  font-weight: 800;
+  color: #f8fafc;
+  line-height: 1.35;
+}
+
+.freq-viewers-meta {
+  font-size: 0.75rem;
+  color: #94a3b8;
+}
+
+.viewers-names {
+  color: #64748b;
+  margin-left: 4px;
+}
+
+.phrasings-section, .keywords-section {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.chip-label {
+  font-size: 0.7rem;
+  color: #64748b;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.phrasing-chips, .keywords-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.phrasing-chip {
+  font-size: 0.72rem;
+  background: rgba(0, 0, 0, 0.35);
+  color: #cbd5e1;
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Auto-Responder Box inside Frequent Question Card */
+.freq-ar-box {
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  padding-top: 10px;
+}
+
+.ar-active-banner {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  padding: 10px 14px;
+  border-radius: 8px;
+}
+
+.active-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.active-banner-text span {
+  font-size: 0.8rem;
+  color: #34d399;
+}
+
+.active-banner-text small {
+  font-size: 0.7rem;
+  color: #94a3b8;
+}
+
+.ar-compose-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.compose-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.compose-header label {
+  font-size: 0.72rem;
+  color: #94a3b8;
+  font-weight: 700;
+}
+
+.ai-draft-btn-sm {
+  font-size: 0.7rem;
+  padding: 3px 10px;
+  font-weight: 700;
+  color: #38bdf8;
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+.answer-textarea-sm {
+  font-size: 0.82rem;
+  padding: 8px 12px;
+  min-height: 52px;
+}
+
+.compose-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.add-to-ar-btn {
+  font-size: 0.78rem;
+  padding: 7px 14px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #0ea5e9, #0284c7);
+  border: none;
+}
+
+.add-to-ar-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.customize-btn {
+  font-size: 0.78rem;
+  padding: 7px 12px;
+  font-weight: 700;
+}
+

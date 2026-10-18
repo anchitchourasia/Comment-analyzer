@@ -6,8 +6,85 @@ import { AuthService } from '../../core/services/auth.service';
 import { AssistantService } from '../../core/services/assistant.service';
 import { QaService } from '../../core/services/qa.service';
 import { ToastService } from '../../core/services/toast.service';
-import { PendingQuestionVM, SuggestionItemVM } from '../../core/models/assistant.models';
+import { PendingQuestionVM, SuggestionItemVM, FrequentQuestionAnalysisVM } from '../../core/models/assistant.models';
 import { QaRecord, MatcherTestResult } from '../../core/models/qa.models';
+
+function extractSmartKeywords(displayText: string, phrasings: string[] = []): string[] {
+  const STOPWORDS = new Set([
+    'what', 'whats', "what's", 'is', 'are', 'was', 'were', 'the', 'a', 'an', 'and', 'or', 'for',
+    'in', 'on', 'at', 'to', 'from', 'with', 'your', 'you', 'u', 'ur', 'my', 'me', 'i', 'we',
+    'do', 'does', 'did', 'can', 'could', 'would', 'will', 'should', 'how', 'why', 'when', 'where',
+    'who', 'whom', 'which', 'tell', 'about', 'please', 'pls', 'bro', 'sir', 'dude', 'streamer',
+    'hey', 'hi', 'hello', 'yo', 'have', 'got', 'has', 'any', 'some', 'much', 'many', 'like'
+  ]);
+
+  const candidates: string[] = [];
+
+  // 1. Raw display text (exact phrasing from chat)
+  if (displayText && displayText.trim()) {
+    candidates.push(displayText.trim());
+  }
+
+  // 2. Original words > 2 chars joined (exact previous trigger formula)
+  const origWords = displayText.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
+  if (origWords.length > 0) {
+    const joined = origWords.join(' ');
+    if (!candidates.includes(joined)) {
+      candidates.push(joined);
+    }
+  }
+
+  // 3. Clean base and other phrasings
+  const cleanBase = displayText.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (cleanBase && !candidates.includes(cleanBase)) {
+    candidates.push(cleanBase);
+  }
+
+  const allPhrases = [displayText, ...phrasings];
+  for (const phrase of allPhrases) {
+    const clean = phrase.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!clean) continue;
+
+    const words = clean.split(' ').filter(w => w.length > 1 && !STOPWORDS.has(w));
+    if (words.length > 0) {
+      const entityPhrase = words.join(' ');
+      if (entityPhrase && !candidates.includes(entityPhrase)) {
+        candidates.push(entityPhrase);
+      }
+      words.forEach(w => {
+        if (w.length >= 3 && !candidates.includes(w)) {
+          candidates.push(w);
+        }
+      });
+    }
+  }
+
+  return Array.from(new Set(candidates.filter(c => !!c && c.trim().length > 0))).slice(0, 6);
+}
+
+function findMatchingTrigger(
+  displayText: string,
+  keywords: string[],
+  records: QaRecord[]
+): { matched: boolean; trigger?: QaRecord } {
+  const normQ = displayText.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+  for (const r of records) {
+    const normRecord = (r.normalized_question || '').toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+    if (normRecord && (normQ === normRecord || normQ.includes(normRecord) || normRecord.includes(normQ))) {
+      return { matched: true, trigger: r };
+    }
+    const examples = (r.original_question_examples || r.example_phrasings || []).map(e =>
+      e.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim()
+    );
+    for (const kw of keywords) {
+      const cleanKw = kw.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim();
+      if (cleanKw && examples.some(ex => ex === cleanKw || ex.includes(cleanKw) || cleanKw.includes(ex))) {
+        return { matched: true, trigger: r };
+      }
+    }
+  }
+  return { matched: false };
+}
 
 @Component({
   selector: 'app-live-qa',
@@ -27,6 +104,12 @@ export class LiveQaComponent {
   suggestionAnswerTexts: { [key: string | number]: string } = {};
   editingSuggestions: { [key: string | number]: boolean } = {};
   autoSendTriggered: { [key: string | number]: boolean } = {};
+
+  // Frequent Questions Analysis State
+  pendingSortMode: 'recent' | 'frequency' = 'recent';
+  frequentFilter: 'all' | 'unconfigured' | 'repeated' = 'all';
+  showFrequentAnalysis = true;
+  highlightedTriggerId: string | null = null;
 
   constructor() {
     effect(() => {
@@ -53,9 +136,104 @@ export class LiveQaComponent {
   testResult: MatcherTestResult | null = null;
   testingMatcher = false;
 
+  // Frequent Questions Computed Analysis Signals
+  totalChatQuestionsCount = computed(() => {
+    const questions = this.assistant.pendingQuestions();
+    return Object.values(questions).reduce((sum, q) => sum + (q.count || 1), 0);
+  });
+
+  allFrequentQuestions = computed<FrequentQuestionAnalysisVM[]>(() => {
+    const questions = this.assistant.pendingQuestions();
+    const records = this.qa.records();
+    const list = Object.values(questions);
+    const totalCount = this.totalChatQuestionsCount();
+
+    const analyzed: FrequentQuestionAnalysisVM[] = list.map((entry) => {
+      const askCount = entry.count || entry.examples?.length || 1;
+      const uniqueViewers = Array.from(new Set(entry.occurrences.map(o => o.authorName).filter(Boolean)));
+      const rawPhrasings = [entry.displayText, ...(entry.examples || []), ...entry.occurrences.map(o => o.text)];
+      const phrasings = Array.from(new Set(rawPhrasings.filter(p => !!p && p.trim().length > 0)));
+      const suggestedKeywords = extractSmartKeywords(entry.displayText, phrasings);
+      const matchResult = findMatchingTrigger(entry.displayText, suggestedKeywords, records);
+      const pct = totalCount > 0 ? Math.round((askCount / totalCount) * 100) : 0;
+
+      return {
+        rank: 0,
+        questionKey: entry.questionKey,
+        displayText: entry.displayText,
+        count: askCount,
+        percentage: pct,
+        uniqueViewers,
+        uniqueViewersCount: uniqueViewers.length || 1,
+        phrasings: phrasings.slice(0, 4),
+        suggestedKeywords,
+        isInAutoResponder: matchResult.matched,
+        matchedTriggerTitle: matchResult.trigger?.normalized_question,
+        matchedTriggerId: matchResult.trigger?.id,
+        pendingEntry: entry
+      };
+    });
+
+    analyzed.sort((a, b) => {
+      if (b.count !== a.count) {
+        return b.count - a.count;
+      }
+      const timeA = a.pendingEntry.lastSeen || a.pendingEntry.occurrences?.[0]?.timestamp || '';
+      const timeB = b.pendingEntry.lastSeen || b.pendingEntry.occurrences?.[0]?.timestamp || '';
+      return timeB.localeCompare(timeA);
+    });
+
+    analyzed.forEach((item, idx) => {
+      item.rank = idx + 1;
+    });
+
+    return analyzed;
+  });
+
+  frequentQuestions = computed(() => {
+    const all = this.allFrequentQuestions();
+    if (this.frequentFilter === 'unconfigured') {
+      return all.filter(q => !q.isInAutoResponder);
+    }
+    if (this.frequentFilter === 'repeated') {
+      return all.filter(q => q.count >= 2);
+    }
+    return all;
+  });
+
+  topFrequentQuestion = computed(() => {
+    return this.allFrequentQuestions()[0] || null;
+  });
+
+  unconfiguredFrequentCount = computed(() => {
+    return this.allFrequentQuestions().filter(q => !q.isInAutoResponder).length;
+  });
+
+  repeatedFrequentCount = computed(() => {
+    return this.allFrequentQuestions().filter(q => q.count >= 2).length;
+  });
+
+  coveredTriggersCount = computed(() => {
+    return this.allFrequentQuestions().filter(q => q.isInAutoResponder).length;
+  });
+
+  totalUniqueInquirers = computed(() => {
+    const all = this.allFrequentQuestions();
+    const viewers = new Set<string>();
+    all.forEach(q => q.uniqueViewers.forEach(v => viewers.add(v)));
+    return viewers.size;
+  });
+
   pendingKeys = computed(() => {
     const questions = this.assistant.pendingQuestions();
     return Object.keys(questions).sort((a, b) => {
+      if (this.pendingSortMode === 'frequency') {
+        const countA = questions[a]?.count || 1;
+        const countB = questions[b]?.count || 1;
+        if (countB !== countA) {
+          return countB - countA;
+        }
+      }
       const timeA = questions[a]?.lastSeen || questions[a]?.occurrences?.[0]?.timestamp || '';
       const timeB = questions[b]?.lastSeen || questions[b]?.occurrences?.[0]?.timestamp || '';
       if (timeA && timeB) {
@@ -162,17 +340,69 @@ export class LiveQaComponent {
 
   // --- Auto-Responder Keyword System Methods (100% Real-Time Dynamic) ---
 
+  onAddFrequentToAutoResponder(item: FrequentQuestionAnalysisVM) {
+    const answer = (this.answerTexts[item.questionKey] || '').trim();
+    if (!answer) {
+      this.toast.error(
+        'Answer Required',
+        'Please enter an answer text or click "Draft with AI" before adding to Auto-Responder'
+      );
+      return;
+    }
+
+    this.qa.saveMemory(
+      item.displayText.trim(),
+      answer,
+      true, // auto_reply = true
+      item.suggestedKeywords,
+      60 // cooldown_seconds = 60
+    ).subscribe({
+      next: () => {
+        this.toast.success(
+          'Trigger Activated! 🤖',
+          `Auto-Responder will now automatically reply to live chat when viewers ask "${item.displayText}"`
+        );
+      }
+    });
+  }
+
+  onCustomizeTriggerFromFrequent(item: FrequentQuestionAnalysisVM) {
+    this.editingTriggerId = null;
+    this.triggerTitle = item.displayText;
+    this.triggerKeywords = item.suggestedKeywords.join(', ');
+    this.triggerAnswer = this.answerTexts[item.questionKey] || '';
+    this.triggerAutoReply = true;
+    this.triggerCooldown = 60;
+    this.showAutoResponderForm = true;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  onScrollToTrigger(triggerId: string) {
+    this.highlightedTriggerId = triggerId;
+    const el = document.getElementById('trigger-' + triggerId);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+    setTimeout(() => {
+      this.highlightedTriggerId = null;
+    }, 3000);
+  }
+
   onQuickAddTriggerFromPending(displayText: string, key: string) {
+    const entry = this.assistant.pendingQuestions()[key];
+    const phrasings = entry ? [displayText, ...(entry.examples || []), ...(entry.occurrences || []).map(o => o.text)] : [displayText];
+    const keywords = extractSmartKeywords(displayText, phrasings);
     const answer = this.answerTexts[key] || '';
     this.editingTriggerId = null;
     this.triggerTitle = displayText;
     this.triggerAnswer = answer;
-    // Derive initial keywords dynamically from real-time question phrasing
-    const words = displayText.toLowerCase().replace(/[^a-z0-9\s]/g, '').split(/\s+/).filter(w => w.length > 2);
-    this.triggerKeywords = [displayText, words.join(' ')].filter((v, i, a) => v && a.indexOf(v) === i).join(', ');
+    this.triggerKeywords = keywords.join(', ');
     this.triggerAutoReply = true;
     this.triggerCooldown = 60;
     this.showAutoResponderForm = true;
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   }
 
   onSaveCustomKeywordTrigger() {

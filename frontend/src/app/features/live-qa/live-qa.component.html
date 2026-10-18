@@ -94,7 +94,7 @@
     } @else {
       <div class="triggers-grid">
         @for (record of qa.records(); track record.id) {
-          <div class="trigger-card glass-card">
+          <div class="trigger-card glass-card" [id]="'trigger-' + record.id" [class.highlight-pulse]="highlightedTriggerId === record.id">
             <div class="trigger-card-header">
               <span class="trigger-title">❓ {{ record.normalized_question | uppercase }}</span>
               <div class="trigger-header-badges">
@@ -161,6 +161,220 @@
     </div>
   </section>
 
+  <!-- Frequent Questions Analysis Panel (Analyzed from NEW QUESTIONS FROM CHAT) -->
+  <section class="frequent-analysis-panel glass-card">
+    <div class="section-title-bar">
+      <div class="title-wrap">
+        <h3>🔥 MOST FREQUENT QUESTIONS ANALYSIS</h3>
+        <span class="count-pill badge-fire">{{ allFrequentQuestions().length }} Inquiries Analyzed</span>
+      </div>
+
+      <div class="freq-panel-controls">
+        <div class="frequent-filter-group">
+          <button 
+            type="button"
+            class="filter-pill-btn" 
+            [class.active]="frequentFilter === 'all'" 
+            (click)="frequentFilter = 'all'"
+          >
+            🔥 All Ranked ({{ allFrequentQuestions().length }})
+          </button>
+          <button 
+            type="button"
+            class="filter-pill-btn" 
+            [class.active]="frequentFilter === 'unconfigured'" 
+            (click)="frequentFilter = 'unconfigured'"
+          >
+            ⚡ Needs Trigger ({{ unconfiguredFrequentCount() }})
+          </button>
+          <button 
+            type="button"
+            class="filter-pill-btn" 
+            [class.active]="frequentFilter === 'repeated'" 
+            (click)="frequentFilter = 'repeated'"
+          >
+            🔁 Repeated (2+ Asks) ({{ repeatedFrequentCount() }})
+          </button>
+        </div>
+
+        <button 
+          type="button"
+          class="btn-secondary toggle-analysis-btn" 
+          (click)="showFrequentAnalysis = !showFrequentAnalysis"
+        >
+          {{ showFrequentAnalysis ? '▲ Hide Analysis' : '▼ Expand Analysis' }}
+        </button>
+      </div>
+    </div>
+
+    <div class="analysis-notice">
+      📊 <strong>Automated Streamer Pattern Analysis:</strong> Evaluates incoming viewer questions from <strong>NEW QUESTIONS FROM CHAT</strong>, calculates repeat frequencies, extracts trigger keywords, and lets you add them directly to your <strong>Live Chat Auto-Responder</strong> with 1 click!
+    </div>
+
+    @if (showFrequentAnalysis) {
+      <!-- Summary Metrics Row -->
+      <div class="frequent-metrics-strip">
+        <div class="freq-metric-card">
+          <span class="fm-icon">💬</span>
+          <div class="fm-content">
+            <span class="fm-value">{{ totalChatQuestionsCount() }}</span>
+            <span class="fm-label">Total Viewer Inquiries</span>
+          </div>
+        </div>
+
+        <div class="freq-metric-card highlight">
+          <span class="fm-icon">🔥</span>
+          <div class="fm-content">
+            <span class="fm-value">{{ topFrequentQuestion() ? ('Asked ' + topFrequentQuestion()!.count + 'x') : '0' }}</span>
+            <span class="fm-label">
+              Top Ask: {{ topFrequentQuestion() ? ('"' + topFrequentQuestion()!.displayText + '"') : 'None yet' }}
+            </span>
+          </div>
+        </div>
+
+        <div class="freq-metric-card">
+          <span class="fm-icon">🤖</span>
+          <div class="fm-content">
+            <span class="fm-value">{{ coveredTriggersCount() }} / {{ allFrequentQuestions().length }}</span>
+            <span class="fm-label">Auto-Trigger Coverage</span>
+          </div>
+        </div>
+
+        <div class="freq-metric-card">
+          <span class="fm-icon">👥</span>
+          <div class="fm-content">
+            <span class="fm-value">{{ totalUniqueInquirers() }}</span>
+            <span class="fm-label">Unique Viewers Inquiring</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Frequent Questions List -->
+      @if (frequentQuestions().length === 0) {
+        <div class="empty-freq-state">
+          <span class="empty-icon">💬</span>
+          <p>No questions matching this filter yet.</p>
+          <span class="empty-sub">
+            Questions detected from your YouTube live chat will automatically be analyzed and ranked by frequency here.
+          </span>
+        </div>
+      } @else {
+        <div class="freq-grid">
+          @for (item of frequentQuestions(); track item.questionKey) {
+            <div class="freq-card glass-card" [class.is-top-one]="item.rank === 1" [class.is-covered]="item.isInAutoResponder">
+              <div class="freq-card-header">
+                <div class="rank-badge" [class.rank-gold]="item.rank === 1" [class.rank-silver]="item.rank === 2" [class.rank-bronze]="item.rank === 3">
+                  {{ item.rank === 1 ? '👑 #1 TOP ASK' : ('#' + item.rank + ' RANKED') }}
+                </div>
+                <div class="freq-badges-right">
+                  <span class="ask-freq-pill">🔥 Asked {{ item.count }} times</span>
+                  <span class="pct-pill">{{ item.percentage }}% of chat volume</span>
+                  @if (item.isInAutoResponder) {
+                    <span class="ar-status-pill active">✅ In Auto-Responder</span>
+                  } @else {
+                    <span class="ar-status-pill missing">⚡ Not In Auto-Responder</span>
+                  }
+                </div>
+              </div>
+
+              <div class="freq-card-body">
+                <h4 class="freq-question-title">❓ "{{ item.displayText }}"</h4>
+
+                <div class="freq-viewers-meta">
+                  <span>👥 Asked by <strong>{{ item.uniqueViewersCount }}</strong> viewer(s)</span>
+                  @if (item.uniqueViewers.length > 0) {
+                    <span class="viewers-names">
+                      ({{ item.uniqueViewers.slice(0, 3).join(', ') }}{{ item.uniqueViewers.length > 3 ? ' +' + (item.uniqueViewers.length - 3) + ' more' : '' }})
+                    </span>
+                  }
+                </div>
+
+                @if (item.phrasings.length > 1) {
+                  <div class="phrasings-section">
+                    <span class="chip-label">Viewer Variations:</span>
+                    <div class="phrasing-chips">
+                      @for (phrase of item.phrasings; track phrase) {
+                        <span class="phrasing-chip">"{{ phrase }}"</span>
+                      }
+                    </div>
+                  </div>
+                }
+
+                <div class="keywords-section">
+                  <span class="chip-label">🎯 Extracted Keywords for Auto-Trigger:</span>
+                  <div class="keywords-chips">
+                    @for (kw of item.suggestedKeywords; track kw) {
+                      <span class="kw-tag">{{ kw }}</span>
+                    }
+                  </div>
+                </div>
+
+                <!-- Auto-Responder Action / Status Container -->
+                <div class="freq-ar-box">
+                  @if (item.isInAutoResponder) {
+                    <div class="ar-active-banner">
+                      <div class="active-banner-text">
+                        <span>🤖 <strong>Active Keyword Trigger:</strong> "{{ item.matchedTriggerTitle }}"</span>
+                        <small>This question is already automatically answered by your Live Chat Auto-Responder!</small>
+                      </div>
+                      @if (item.matchedTriggerId) {
+                        <button type="button" class="btn-secondary btn-sm" (click)="onScrollToTrigger(item.matchedTriggerId!)">
+                          🔍 View Active Trigger
+                        </button>
+                      }
+                    </div>
+                  } @else {
+                    <div class="ar-compose-box">
+                      <div class="compose-header">
+                        <label>Saved Response (Sent directly to YouTube Live Chat):</label>
+                        <button 
+                          type="button"
+                          class="btn-secondary ai-draft-btn-sm" 
+                          (click)="onGetAiDraft(item.displayText, item.questionKey)"
+                          [disabled]="assistant.loadingAiDraftKey() === item.questionKey"
+                        >
+                          {{ assistant.loadingAiDraftKey() === item.questionKey ? '✨ Drafting...' : '✨ Draft Answer with AI' }}
+                        </button>
+                      </div>
+
+                      <textarea 
+                        class="input-glass answer-textarea-sm" 
+                        rows="2" 
+                        [(ngModel)]="answerTexts[item.questionKey]"
+                        placeholder="Type response to auto-send when viewers ask this question in live chat..."
+                      ></textarea>
+
+                      <div class="compose-actions">
+                        <button 
+                          type="button"
+                          class="btn-primary add-to-ar-btn"
+                          (click)="onAddFrequentToAutoResponder(item)"
+                          [disabled]="!answerTexts[item.questionKey]"
+                          title="Save this question to Live Chat Auto-Responder"
+                        >
+                          ⚡ Add to Auto-Responder (Keyword Triggers)
+                        </button>
+
+                        <button 
+                          type="button"
+                          class="btn-secondary customize-btn"
+                          (click)="onCustomizeTriggerFromFrequent(item)"
+                          title="Open the top trigger form to customize cooldown or keywords"
+                        >
+                          ✏️ Customize in Form
+                        </button>
+                      </div>
+                    </div>
+                  }
+                </div>
+              </div>
+            </div>
+          }
+        </div>
+      }
+    }
+  </section>
+
   <!-- Content Grid -->
   <div class="qa-workspace">
     <!-- Pending Questions Section -->
@@ -170,7 +384,26 @@
           <h3>🙋 NEW QUESTIONS FROM CHAT</h3>
           <span class="count-pill">{{ pendingKeys().length }}</span>
         </div>
-        <span class="stream-filter-note">Real-Time Queue</span>
+        <div class="queue-sort-group">
+          <button 
+            type="button" 
+            class="sort-pill-btn" 
+            [class.active]="pendingSortMode === 'recent'" 
+            (click)="pendingSortMode = 'recent'"
+            title="Sort by newest incoming message"
+          >
+            ⏱️ Recent
+          </button>
+          <button 
+            type="button" 
+            class="sort-pill-btn" 
+            [class.active]="pendingSortMode === 'frequency'" 
+            (click)="pendingSortMode = 'frequency'"
+            title="Sort by most frequently asked"
+          >
+            🔥 Most Frequent
+          </button>
+        </div>
       </div>
 
       @if (assistant.loadingPending()) {

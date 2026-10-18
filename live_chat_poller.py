@@ -360,11 +360,18 @@ def process_message(state, author_name, author_channel_id, text, poster,
                     qa_engine.mark_used(record_id, channel_id=ch_id)
             return
         else:
+            # When poster is None (browser UI environment), route through suggestions
+            # so chat detects it in HIGH CONFIDENCE SUGGESTIONS (≥ 80%) and auto-sends to live chat
             if is_record_on_cooldown(ch_id, record_id, cooldown_sec):
                 return
             record_post_cooldown(ch_id, record_id)
             if record_id:
                 qa_engine.mark_used(record_id, channel_id=ch_id)
+            state.add_suggestion(
+                text, answer_text, score, author_name,
+                record_id=record_id, live_chat_id=state.live_chat_id, message_id=message_id,
+                auto_reply=is_auto, is_keyword_trigger=is_kw
+            )
             return
 
     # If no keyword trigger auto-posted, check if message is a question or suggestion match
@@ -720,7 +727,6 @@ def poll_loop(state, api_key, live_chat_id, poster):
     is_simulated = (
         not api_key
         or live_chat_id.startswith("mock_")
-        or live_chat_id.startswith("live_chat_")
         or live_chat_id.startswith("simulated_")
     )
 
@@ -777,8 +783,8 @@ def poll_loop(state, api_key, live_chat_id, poster):
             state.stop_event.wait(max(0.0, interval - elapsed))
     finally:
         if state.generation == generation:
-            qa_engine.reset_session_memory(channel_id=ch_id)
-            reset_pending(channel_id=ch_id)
+            qa_engine.reset_session_memory()
+            reset_pending()
             state.clear_session()
             if state.state == "running":
                 state.state = "idle"
@@ -829,9 +835,8 @@ def stop_assistant(state, poster=None):
     stopped = thread is None or not thread.is_alive()
     if stopped:
         state.thread = None
-    ch_id = getattr(state, "channel_id", None)
     qa_engine.reset_session_memory()
-    reset_pending(channel_id=ch_id)
+    reset_pending()
     state.clear_session()
     return stopped
 

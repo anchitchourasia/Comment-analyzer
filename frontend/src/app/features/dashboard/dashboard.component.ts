@@ -47,6 +47,13 @@ export class DashboardComponent {
     });
   });
 
+  topRepeatedQuestionCount = computed(() => {
+    const questions = this.assistant.pendingQuestions();
+    const values = Object.values(questions);
+    if (!values.length) return 0;
+    return Math.max(...values.map(v => v.count || 1));
+  });
+
   onConnectStream() {
     if (!this.videoInput) return;
     this.connecting = true;

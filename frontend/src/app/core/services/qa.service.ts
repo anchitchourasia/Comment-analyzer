@@ -1,7 +1,7 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { ApiClientService } from './api-client.service';
 import { ToastService } from './toast.service';
-import { QaRecord, MatcherTestResult } from '../models/qa.models';
+import { QaRecord, MatcherTestResult, PineconeStatus } from '../models/qa.models';
 import { tap, catchError } from 'rxjs/operators';
 import { of, throwError } from 'rxjs';
 
@@ -15,8 +15,12 @@ export class QaService {
   records = signal<QaRecord[]>([]);
   loading = signal<boolean>(false);
 
+  /** Live Pinecone storage status — null until first fetch */
+  pineconeStatus = signal<PineconeStatus | null>(null);
+
   constructor() {
     this.loadMemory();
+    this.loadPineconeStatus();
   }
 
   loadMemory() {
@@ -32,6 +36,24 @@ export class QaService {
         }),
         catchError(() => {
           this.loading.set(false);
+          return of(null);
+        }),
+      )
+      .subscribe();
+  }
+
+  /** Fetch Pinecone connectivity & record count from the backend. */
+  loadPineconeStatus() {
+    this.api
+      .get<PineconeStatus>('/api/pinecone/status')
+      .pipe(
+        tap((res) => {
+          if (res) {
+            this.pineconeStatus.set(res);
+          }
+        }),
+        catchError(() => {
+          this.pineconeStatus.set({ available: false, error: 'Could not reach backend' });
           return of(null);
         }),
       )
@@ -55,6 +77,7 @@ export class QaService {
         tap(() => {
           this.toast.success('Q&A Saved 💾', 'Record added to pre-approved memory bank');
           this.loadMemory();
+          this.loadPineconeStatus(); // refresh count after save
         }),
         catchError((err) => {
           this.toast.error('Save Error', 'Failed to save Q&A record');
@@ -72,6 +95,7 @@ export class QaService {
       tap(() => {
         this.toast.info('Record Deleted', 'Q&A pair removed from memory bank');
         this.loadMemory();
+        this.loadPineconeStatus(); // refresh count after delete
       }),
       catchError((err) => {
         this.toast.error('Delete Error', 'Failed to delete Q&A record');

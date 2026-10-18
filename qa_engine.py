@@ -1,18 +1,26 @@
-"""Q&A memory: v2 schema, thread-safe, session-temporary.
+"""Q&A memory: v2 schema, thread-safe, Pinecone-backed persistent storage.
 
-Storage is IN-MEMORY only, scoped to the current assistant session:
-it starts empty when the assistant starts and is wiped when the poller
-stops, the stream ends, or videos switch. Nothing persists between
-streams. Tests redirect storage to a real file via QA_FILE to exercise
-the exact file save/load/corrupt-parking logic.
+Primary storage backend is Pinecone (cloud vector database) when
+PINECONE_API_KEY is set.  Falls back transparently to JSON-file storage
+(per-channel data/channels/<id>/qa_data.json) when Pinecone is
+unavailable, so the app keeps working without network access or during
+first-run setup.
 
-One JSON record per approved question:
+One JSON/Pinecone record per approved question:
     id, normalized_question, original_question_examples, answer_text,
     status ("approved" | "draft"), auto_reply, usage_count,
     created_at, updated_at, last_used_at
 
 Only "approved" records are returned by find_best_answer — that is what
 gates everything the poller does.
+
+Pinecone details:
+    Index  : "stream-assistant-qa"
+    Namespace : channel_id (or "default")
+    Each vector = hash-embedding of normalized_question; full record
+    stored as Pinecone metadata.  The precise lexical + synonym scoring
+    in this module is unchanged — Pinecone is the durable store, local
+    CPU is the scorer.
 """
 
 import json
@@ -23,7 +31,20 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 from backend import storage
+
+# ---------------------------------------------------------------------------
+# Pinecone toggle: on when PINECONE_API_KEY is present in the environment.
+# ---------------------------------------------------------------------------
+import pinecone_store as _pc_store
+
+def _pinecone_enabled() -> bool:
+    """True when Pinecone is configured and reachable."""
+    return bool(os.environ.get("PINECONE_API_KEY", "").strip()) and _pc_store.is_available()
 
 QA_FILE = None  # explicit file override (tests); None = in-memory session or channel path
 
@@ -155,12 +176,23 @@ def atomic_write_json(path, data):
 def reset_session_memory(channel_id=None):
     """Drop all temporary Q&A. start_assistant calls this so a new stream
     begins empty; the poller calls it on stop, stream end, and video
-    switch. Wipes stream data for the channel."""
+    switch.
+
+    Pinecone note: the Q&A bank is PERSISTENT in Pinecone (that is the
+    point of using it). Only the in-memory session cache is cleared here;
+    the Pinecone records survive so the next stream immediately has all
+    approved answers available.  To wipe Pinecone for a channel call
+    pinecone_store.clear_namespace(channel_id) explicitly.
+    """
     with QA_LOCK:
         _session_records.clear()
-        target_file = QA_FILE if QA_FILE is not None else (storage.get_qa_path(channel_id) if channel_id else None)
-        if target_file is not None and target_file.exists():
-            atomic_write_json(target_file, [])
+        # Only clear the JSON file fallback when Pinecone is NOT in use
+        if not _pinecone_enabled():
+            target_file = QA_FILE if QA_FILE is not None else (
+                storage.get_qa_path(channel_id) if channel_id else None
+            )
+            if target_file is not None and target_file.exists():
+                atomic_write_json(target_file, [])
 
 
 def _to_v2(item):
@@ -217,8 +249,24 @@ def _to_v2(item):
 
 
 def load_qa_data(channel_id=None):
+    """Load all QA records.
+
+    Priority:
+      1. Pinecone (when PINECONE_API_KEY is set and index is reachable)
+      2. JSON file per channel / root (legacy fallback)
+      3. In-memory session store (no channel, no file override)
+    """
     with QA_LOCK:
-        target_file = QA_FILE if QA_FILE is not None else (storage.get_qa_path(channel_id) if channel_id else None)
+        # --- Pinecone path ---
+        if QA_FILE is None and _pinecone_enabled():
+            records = _pc_store.load_qa_data(channel_id=channel_id)
+            # Coerce through v2 schema for safety
+            return [r for r in (_to_v2(item) for item in records) if r]
+
+        # --- JSON file path ---
+        target_file = QA_FILE if QA_FILE is not None else (
+            storage.get_qa_path(channel_id) if channel_id else None
+        )
         if target_file is not None:
             if not target_file.exists():
                 atomic_write_json(target_file, [])
@@ -241,13 +289,27 @@ def load_qa_data(channel_id=None):
 
             return [record for record in (_to_v2(item) for item in raw) if record]
 
+        # --- In-memory session path ---
         return list(_session_records)
 
 
 def save_qa_data(data, channel_id=None):
+    """Persist QA records to Pinecone (primary) or JSON / session (fallback).
+
+    Returns the sanitised record list.
+    """
     with QA_LOCK:
         records = [record for record in (_to_v2(item) for item in data) if record]
-        target_file = QA_FILE if QA_FILE is not None else (storage.get_qa_path(channel_id) if channel_id else None)
+
+        # --- Pinecone path ---
+        if QA_FILE is None and _pinecone_enabled():
+            _pc_store.save_qa_data(records, channel_id=channel_id)
+            return records
+
+        # --- JSON file path ---
+        target_file = QA_FILE if QA_FILE is not None else (
+            storage.get_qa_path(channel_id) if channel_id else None
+        )
         if target_file is not None:
             atomic_write_json(target_file, records)
         else:
@@ -309,7 +371,10 @@ def add_question_answer(question, answer, auto_reply=False,
                 _remember_example(record, question)
                 for k in kw_list:
                     _remember_example(record, k)
-                save_qa_data(data, channel_id=channel_id)
+                if QA_FILE is None and _pinecone_enabled():
+                    _pc_store.upsert_record(record, channel_id=channel_id)
+                else:
+                    save_qa_data(data, channel_id=channel_id)
                 return record
 
         record = {
@@ -326,7 +391,10 @@ def add_question_answer(question, answer, auto_reply=False,
             "last_used_at": None,
         }
         data.append(record)
-        save_qa_data(data, channel_id=channel_id)
+        if QA_FILE is None and _pinecone_enabled():
+            _pc_store.upsert_record(record, channel_id=channel_id)
+        else:
+            save_qa_data(data, channel_id=channel_id)
         return record
 
 
@@ -338,13 +406,18 @@ def mark_used(record_id, channel_id=None):
             if record["id"] == record_id:
                 record["usage_count"] += 1
                 record["last_used_at"] = now_iso()
-                save_qa_data(data, channel_id=channel_id)
+                if QA_FILE is None and _pinecone_enabled():
+                    _pc_store.upsert_record(record, channel_id=channel_id)
+                else:
+                    save_qa_data(data, channel_id=channel_id)
                 return record
     return None
 
 
 def delete_record(record_id, channel_id=None):
     with QA_LOCK:
+        if QA_FILE is None and _pinecone_enabled():
+            return _pc_store.delete_record(record_id, channel_id=channel_id)
         data = load_qa_data(channel_id=channel_id)
         remaining = [record for record in data if record["id"] != record_id]
         if len(remaining) != len(data):

@@ -9,6 +9,24 @@
     </button>
   </div>
 
+  <!-- Pinecone Storage Status Badge -->
+  @if (qaService.pineconeStatus(); as ps) {
+    <div class="pinecone-badge" [class.pinecone-ok]="ps.available" [class.pinecone-err]="!ps.available">
+      @if (ps.available) {
+        <span class="badge-dot badge-dot--green"></span>
+        <strong>Pinecone Connected</strong>
+        &nbsp;·&nbsp; Index: <code>{{ ps.index_name }}</code>
+        &nbsp;·&nbsp; Namespace: <code>{{ ps.namespace }}</code>
+        &nbsp;·&nbsp; <strong>{{ ps.vector_count }}</strong> records in cloud
+      } @else {
+        <span class="badge-dot badge-dot--amber"></span>
+        <strong>Pinecone unavailable</strong>
+        @if (ps.error) { — {{ ps.error }} }
+        &nbsp; (falling back to local JSON storage)
+      }
+    </div>
+  }
+
   <!-- Search Filter & Sandbox Toggle -->
   <div class="toolbar">
     <input 
@@ -19,6 +37,7 @@
     />
     <div class="records-count">{{ filteredRecords().length }} Approved Records</div>
   </div>
+
 
   <!-- Matcher Sandbox Tester Tool -->
   <div class="sandbox-card glass-card">

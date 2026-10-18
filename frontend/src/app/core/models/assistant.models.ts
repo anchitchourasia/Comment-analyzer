@@ -157,6 +157,22 @@ export interface SuperchatAlertVM {
 
 export type AssistantStatusVM = AssistantStatusDto;
 
+export interface FrequentQuestionAnalysisVM {
+  rank: number;
+  questionKey: string;
+  displayText: string;
+  count: number;
+  percentage: number;
+  uniqueViewers: string[];
+  uniqueViewersCount: number;
+  phrasings: string[];
+  suggestedKeywords: string[];
+  isInAutoResponder: boolean;
+  matchedTriggerTitle?: string;
+  matchedTriggerId?: string;
+  pendingEntry: PendingQuestionVM;
+}
+
 
 // --- Explicit Mapping Layer Functions ---
 
