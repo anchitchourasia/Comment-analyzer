@@ -12,11 +12,20 @@ import { AuthService } from '../../../core/services/auth.service';
 export class LoginComponent {
   auth = inject(AuthService);
   loading = false;
+  errorMessage: string | null = null;
 
   onGoogleLogin() {
     this.loading = true;
+    this.errorMessage = null;
     this.auth.loginInit().subscribe({
-      error: () => this.loading = false
+      error: (err) => {
+        this.loading = false;
+        if (err.status === 503) {
+          this.errorMessage = 'Google Sign-In is not configured yet on this server. Click "Continue in Manual Local Video Mode" below to enter immediately, or add GOOGLE_CLIENT_ID to Render.';
+        } else {
+          this.errorMessage = 'Login failed. Please click "Continue in Manual Local Video Mode" below.';
+        }
+      }
     });
   }
 
