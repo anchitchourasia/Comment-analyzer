@@ -38,13 +38,14 @@ discovered_channels_store = {}
 # Mandatory minimum OAuth scopes required by application
 MINIMUM_SCOPES = "openid email profile https://www.googleapis.com/auth/youtube.force-ssl"
 
-def get_frontend_url() -> str:
+def get_frontend_url(request: Request = None) -> str:
     import os
-    from urllib.parse import urlparse
     url = os.environ.get("FRONTEND_URL") or os.environ.get("STREAMLIT_URL")
     if url:
         return url.rstrip("/")
-    return "http://localhost:8501"
+    if request:
+        return str(request.base_url).rstrip("/")
+    return "http://localhost:4200"
 
 def perform_single_oauth_exchange_and_discovery(code: str, redirect_uri: str) -> dict:
     """Performs EXACTLY ONE authorization code exchange with Google, obtaining OpenID identity & YouTube channel info.
@@ -665,7 +666,7 @@ async def login_init():
 @router.get("/api/auth/login/callback")
 async def login_callback_get(request: Request, code: str = None, state: str = None, error: str = None):
     """Handle Login callback GET from browser redirect (Idempotent single exchange)."""
-    frontend = get_frontend_url()
+    frontend = get_frontend_url(request)
     if error or not state or state not in login_states:
         return RedirectResponse(url=f"{frontend}/?auth_error=invalid_state", status_code=status.HTTP_303_SEE_OTHER)
     
@@ -802,7 +803,7 @@ async def oauth_init(current_user: UserSessionModel = Depends(get_current_user))
 @router.get("/api/oauth/callback")
 async def oauth_callback_get(request: Request, code: str = None, state: str = None, error: str = None):
     """Handle YouTube OAuth callback GET from browser redirect (Idempotent single exchange)."""
-    frontend = get_frontend_url()
+    frontend = get_frontend_url(request)
     if error or not state or state not in oauth_states:
         return RedirectResponse(url=f"{frontend}/?auth_error=invalid_state", status_code=status.HTTP_303_SEE_OTHER)
 
