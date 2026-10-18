@@ -1,6 +1,6 @@
 # Multi-stage Dockerfile for unified Comment-Analyzer deployment
 # Stage 1: Build Angular Frontend
-FROM node:20-alpine AS frontend-builder
+FROM node:22-alpine AS frontend-builder
 WORKDIR /app/frontend
 
 COPY frontend/package*.json ./
