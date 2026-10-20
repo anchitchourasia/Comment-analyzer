@@ -40,12 +40,33 @@
   gap: 16px;
 }
 
-.back-btn {
+.back-btn, .memory-nav-btn {
   padding: 8px 16px;
   font-size: 0.85rem;
   font-weight: 700;
   border-radius: 8px;
   text-decoration: none;
+  white-space: nowrap;
+}
+
+.memory-nav-btn {
+  border-color: rgba(0, 242, 254, 0.4);
+  color: var(--accent-cyan);
+}
+
+.memory-nav-btn:hover {
+  background: rgba(0, 242, 254, 0.12);
+  border-color: var(--accent-cyan);
+}
+
+.manage-memory-btn {
+  padding: 8px 14px;
+  font-size: 0.82rem;
+  font-weight: 700;
+  border-radius: 8px;
+  text-decoration: none;
+  border-color: rgba(0, 242, 254, 0.3);
+  color: var(--accent-cyan);
 }
 
 .qa-workspace {
@@ -241,11 +262,38 @@
   align-items: center;
   margin-top: 10px;
   gap: 10px;
+  flex-wrap: wrap;
 }
 
 .post-buttons {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.save-post-btn {
+  font-weight: 800;
+  box-shadow: 0 4px 14px rgba(0, 242, 254, 0.35);
+}
+
+.save-only-btn {
+  border-color: rgba(127, 0, 255, 0.4);
+  color: #c084fc;
+}
+
+.save-only-btn:hover {
+  background: rgba(127, 0, 255, 0.15);
+  border-color: var(--accent-purple);
+}
+
+.auto-responder-convert-btn {
+  border-color: rgba(255, 184, 0, 0.4);
+  color: #fbbf24;
+}
+
+.auto-responder-convert-btn:hover {
+  background: rgba(255, 184, 0, 0.15);
 }
 
 .suggestions-column {

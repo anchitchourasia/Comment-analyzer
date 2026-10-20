@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, HostListener } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { QaService } from '../../core/services/qa.service';
@@ -18,6 +18,8 @@ export class QaLibraryComponent {
 
   searchQuery = '';
   showAddModal = false;
+  savingRecord = false;
+  private openerElement: HTMLElement | null = null;
 
   newQuestion = '';
   newAnswer = '';
@@ -26,6 +28,13 @@ export class QaLibraryComponent {
   testQuestionInput = '';
   testResult: MatcherTestResult | null = null;
   testing = false;
+
+  @HostListener('document:keydown.escape')
+  onEscapePress() {
+    if (this.showAddModal) {
+      this.closeModal();
+    }
+  }
 
   filteredRecords() {
     const q = this.searchQuery.toLowerCase().trim();
@@ -36,33 +45,75 @@ export class QaLibraryComponent {
     );
   }
 
+  openAddModal() {
+    this.openerElement = document.activeElement as HTMLElement;
+    this.showAddModal = true;
+    setTimeout(() => {
+      const input = document.getElementById('newQuestionInput') as HTMLInputElement;
+      if (input) {
+        input.focus();
+      }
+    }, 50);
+  }
+
+  closeModal(force = false) {
+    if (!force && (this.newQuestion.trim() || this.newAnswer.trim())) {
+      if (!confirm('Discard unsaved changes?')) {
+        return;
+      }
+    }
+    this.showAddModal = false;
+    this.newQuestion = '';
+    this.newAnswer = '';
+    this.newAutoReply = false;
+    this.savingRecord = false;
+
+    if (this.openerElement) {
+      this.openerElement.focus();
+      this.openerElement = null;
+    }
+  }
+
+  onBackdropClick() {
+    this.closeModal();
+  }
+
   onSaveNewRecord() {
-    if (!this.newQuestion || !this.newAnswer) return;
-    this.qaService.saveMemory(this.newQuestion, this.newAnswer, this.newAutoReply).subscribe({
+    if (this.savingRecord || !this.newQuestion.trim() || !this.newAnswer.trim()) return;
+    this.savingRecord = true;
+    this.qaService.saveMemory(this.newQuestion.trim(), this.newAnswer.trim(), this.newAutoReply).subscribe({
       next: () => {
-        this.showAddModal = false;
-        this.newQuestion = '';
-        this.newAnswer = '';
-        this.newAutoReply = false;
+        this.savingRecord = false;
+        this.closeModal(true);
+        this.toast.success('Record Added', 'New pre-approved Q&A pair saved in memory bank.');
+      },
+      error: () => {
+        this.savingRecord = false;
       }
     });
   }
 
   onDeleteRecord(id: string) {
     if (confirm('Are you sure you want to delete this pre-approved Q&A record?')) {
-      this.qaService.deleteMemory(id).subscribe();
+      this.qaService.deleteMemory(id).subscribe({
+        next: () => {
+          this.toast.success('Record Deleted', 'Q&A record deleted from memory bank.');
+        }
+      });
     }
   }
 
   onRunSandboxTest() {
-    if (!this.testQuestionInput) return;
+    if (!this.testQuestionInput.trim()) return;
     this.testing = true;
-    this.qaService.testMatcher(this.testQuestionInput).subscribe({
+    this.qaService.testMatcher(this.testQuestionInput.trim()).subscribe({
       next: (res) => {
         this.testing = false;
         this.testResult = res;
       },
-      error: () => this.testing = false
+      error: () => {
+        this.testing = false;
+      }
     });
   }
 }

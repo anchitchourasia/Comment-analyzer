@@ -643,7 +643,7 @@ async def demo_login():
     )
 
 @router.get("/api/auth/login/init", response_model=LoginInitResponse)
-async def login_init():
+async def login_init(request: Request = None):
     """Initialize Login flow with minimum required scopes."""
     if not oauth_config.is_oauth_configured():
         raise HTTPException(
@@ -651,7 +651,25 @@ async def login_init():
             detail="Google login not configured"
         )
     state_token = "state_login_" + uuid.uuid4().hex[:12]
-    login_states[state_token] = True
+    
+    frontend_base = None
+    if request:
+        referer = request.headers.get("referer")
+        origin = request.headers.get("origin")
+        if referer:
+            try:
+                from urllib.parse import urlparse
+                p = urlparse(referer)
+                frontend_base = f"{p.scheme}://{p.netloc}"
+            except Exception:
+                pass
+        elif origin:
+            frontend_base = origin
+
+    login_states[state_token] = {
+        "created_at": datetime.now(timezone.utc),
+        "frontend": frontend_base or get_frontend_url(request)
+    }
 
     redirect_uri = oauth_config.REDIRECT_URI_LOGIN
     client_id = oauth_config.get_client_id()
@@ -666,16 +684,18 @@ async def login_init():
 @router.get("/api/auth/login/callback")
 async def login_callback_get(request: Request, code: str = None, state: str = None, error: str = None):
     """Handle Login callback GET from browser redirect (Idempotent single exchange)."""
-    frontend = get_frontend_url(request)
+    state_data = login_states.get(state)
+    frontend = (state_data.get("frontend") if isinstance(state_data, dict) else None) or get_frontend_url(request)
+
     if error or not state or state not in login_states:
-        return RedirectResponse(url=f"{frontend}/?auth_error=invalid_state", status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url=f"{frontend}/login?auth_error=invalid_state", status_code=status.HTTP_303_SEE_OTHER)
     
     # Immediately consume state to ensure single execution
     del login_states[state]
 
     res = perform_single_oauth_exchange_and_discovery(code, oauth_config.REDIRECT_URI_LOGIN)
     if not res["success"]:
-        return RedirectResponse(url=f"{frontend}/?auth_error=oauth_failed", status_code=status.HTTP_303_SEE_OTHER)
+        return RedirectResponse(url=f"{frontend}/login?auth_error=oauth_failed", status_code=status.HTTP_303_SEE_OTHER)
 
     session_token = secrets.token_hex(32)
     user_id = f"google|{res['user_email'] or uuid.uuid4().hex[:12]}"

@@ -4,7 +4,7 @@
       <h2>🧠 Q&A MEMORY BANK</h2>
       <p class="subtitle">Pre-approved answers automatically matched against viewer live chat questions.</p>
     </div>
-    <button class="btn-primary" (click)="showAddModal = true">
+    <button id="openModalBtn" class="btn-primary" (click)="openAddModal()">
       ➕ Add Approved Q&A
     </button>
   </div>
@@ -33,24 +33,26 @@
       type="text" 
       class="input-glass search-input" 
       placeholder="🔍 Search approved questions & answers..." 
+      aria-label="Search approved questions and answers"
       [(ngModel)]="searchQuery" 
     />
     <div class="records-count">{{ filteredRecords().length }} Approved Records</div>
   </div>
 
-
   <!-- Matcher Sandbox Tester Tool -->
   <div class="sandbox-card glass-card">
     <h3>🧪 MATCHER SANDBOX TESTER</h3>
-    <p class="sandbox-sub">Type a test question to verify Jaccard lexical similarity score against memory bank.</p>
+    <p class="sandbox-sub">Type a test question to verify lexical and semantic similarity against approved answers. <em>Simulates matching without altering memory or posting to YouTube.</em></p>
     <div class="input-group">
       <input 
         type="text" 
         class="input-glass" 
         placeholder="Type test viewer question (e.g. What camera do you use?)" 
+        aria-label="Test question input"
         [(ngModel)]="testQuestionInput" 
+        (keyup.enter)="onRunSandboxTest()"
       />
-      <button class="btn-secondary" (click)="onRunSandboxTest()" [disabled]="testing || !testQuestionInput">
+      <button type="button" class="btn-secondary" (click)="onRunSandboxTest()" [disabled]="testing || !testQuestionInput.trim()">
         {{ testing ? 'Testing...' : 'Run Test' }}
       </button>
     </div>
@@ -60,13 +62,16 @@
         <div class="score-gauge">
           <span class="score-num">{{ (testResult.score * 100).toFixed(0) }}%</span>
           <span class="score-label">Similarity Match</span>
+          <span class="category-pill" [ngClass]="testResult.score >= 0.8 ? 'cat-high' : (testResult.score >= 0.5 ? 'cat-med' : 'cat-low')">
+            {{ testResult.score >= 0.8 ? 'High (≥80%)' : (testResult.score >= 0.5 ? 'Medium (50-79%)' : 'Low (<50%)') }}
+          </span>
         </div>
         <div class="matched-details">
           @if (testResult.matched_record) {
             <div class="matched-title">Matched Question: "{{ testResult.matched_record.normalized_question }}"</div>
             <div class="matched-answer">Answer: "{{ testResult.matched_record.answer_text }}"</div>
           } @else {
-            <div class="no-match">No high-confidence lexical match found (Score < 0.50).</div>
+            <div class="no-match">No high-confidence match found (Score &lt; 0.50).</div>
           }
 
           @if (testResult.ai_draft) {
@@ -91,7 +96,7 @@
         <div class="record-card glass-card">
           <div class="card-header">
             <span class="q-label">Q: {{ rec.normalized_question }}</span>
-            <button class="btn-icon delete-btn" (click)="onDeleteRecord(rec.id)" title="Delete record">🗑️</button>
+            <button type="button" class="btn-icon delete-btn" (click)="onDeleteRecord(rec.id)" title="Delete record" aria-label="Delete this approved Q&A record">🗑️</button>
           </div>
 
           <div class="a-label">
@@ -113,18 +118,27 @@
 
   <!-- Add New Q&A Modal -->
   @if (showAddModal) {
-    <div class="modal-overlay">
-      <div class="modal-card glass-card">
-        <h3>Add Pre-Approved Q&A Pair</h3>
-
-        <div class="form-group">
-          <label>Question Phrasing:</label>
-          <input type="text" class="input-glass" placeholder="e.g. What camera is that?" [(ngModel)]="newQuestion" />
+    <div class="modal-overlay" (click)="onBackdropClick()">
+      <div 
+        class="modal-card glass-card" 
+        role="dialog" 
+        aria-modal="true" 
+        aria-labelledby="modalTitle"
+        (click)="$event.stopPropagation()"
+      >
+        <div class="modal-header">
+          <h3 id="modalTitle">Add Pre-Approved Q&A Pair</h3>
+          <button type="button" class="btn-icon modal-close-btn" (click)="closeModal()" aria-label="Close dialog">✕</button>
         </div>
 
         <div class="form-group">
-          <label>Approved Answer:</label>
-          <textarea class="input-glass" rows="3" placeholder="e.g. I use a Sony A7 IV with a 24-70mm f/2.8 lens!" [(ngModel)]="newAnswer"></textarea>
+          <label for="newQuestionInput">Question Phrasing:</label>
+          <input id="newQuestionInput" type="text" class="input-glass" placeholder="e.g. What camera is that?" [(ngModel)]="newQuestion" />
+        </div>
+
+        <div class="form-group">
+          <label for="newAnswerInput">Approved Answer:</label>
+          <textarea id="newAnswerInput" class="input-glass" rows="3" placeholder="e.g. I use a Sony A7 IV with a 24-70mm f/2.8 lens!" [(ngModel)]="newAnswer"></textarea>
         </div>
 
         <div class="form-checkbox">
@@ -133,9 +147,9 @@
         </div>
 
         <div class="modal-actions">
-          <button class="btn-secondary" (click)="showAddModal = false">Cancel</button>
-          <button class="btn-primary" (click)="onSaveNewRecord()" [disabled]="!newQuestion || !newAnswer">
-            Save & Approve
+          <button type="button" class="btn-secondary" (click)="closeModal()">Cancel</button>
+          <button type="button" class="btn-primary" (click)="onSaveNewRecord()" [disabled]="savingRecord || !newQuestion.trim() || !newAnswer.trim()">
+            {{ savingRecord ? 'Saving...' : 'Save & Approve' }}
           </button>
         </div>
       </div>

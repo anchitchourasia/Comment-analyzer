@@ -2,7 +2,7 @@ import { Injectable, inject, signal, computed } from '@angular/core';
 import { Router } from '@angular/router';
 import { ApiClientService } from './api-client.service';
 import { UserSession, LoginInitResponse, OAuthInitResponse, ChannelSelectResponse } from '../models/auth.models';
-import { catchError, of, tap } from 'rxjs';
+import { catchError, of, tap, switchMap, Observable } from 'rxjs';
 
 @Injectable({
   providedIn: 'root'
@@ -20,32 +20,35 @@ export class AuthService {
   hasChannelSelected = computed(() => !!this.user()?.selected_channel_id);
 
   constructor() {
-    this.checkSession();
+    this.checkSession().subscribe();
   }
 
-  checkSession() {
+  checkSession(explicitToken?: string): Observable<UserSession | null> {
     this.loading.set(true);
 
-    // Extract session_token from URL query parameters if redirected from backend OAuth
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const urlToken = urlParams.get('session_token');
-      if (urlToken) {
-        localStorage.setItem('session_token', urlToken);
-        const cleanUrl = window.location.pathname + window.location.hash;
-        window.history.replaceState({}, document.title, cleanUrl);
-      }
-    } catch (e) {}
+    if (explicitToken) {
+      localStorage.setItem('session_token', explicitToken);
+    } else {
+      // Extract session_token from URL query parameters if redirected from backend OAuth
+      try {
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken = urlParams.get('session_token');
+        if (urlToken) {
+          localStorage.setItem('session_token', urlToken);
+          const cleanUrl = window.location.pathname + window.location.hash;
+          window.history.replaceState({}, document.title, cleanUrl);
+        }
+      } catch (e) {}
+    }
 
     const token = localStorage.getItem('session_token');
     if (!token) {
-      this.demoLogin().subscribe(() => {
-        this.loading.set(false);
-      });
-      return;
+      this.user.set(null);
+      this.loading.set(false);
+      return of(null);
     }
 
-    this.api.get<UserSession>('/api/me').pipe(
+    return this.api.get<UserSession>('/api/me').pipe(
       tap((session) => {
         if (session) {
           this.user.set(session);
@@ -55,12 +58,13 @@ export class AuthService {
         this.loading.set(false);
       }),
       catchError(() => {
-        this.demoLogin().subscribe(() => {
-          this.loading.set(false);
-        });
+        // Clear invalid or expired session token
+        localStorage.removeItem('session_token');
+        this.user.set(null);
+        this.loading.set(false);
         return of(null);
       })
-    ).subscribe();
+    );
   }
 
   demoLogin() {
@@ -112,13 +116,13 @@ export class AuthService {
     );
   }
 
-  loginCallback(code: string, state: string) {
+  loginCallback(code: string, state: string): Observable<UserSession | null> {
     return this.api.post<{ status: string; session_token: string; user_id: string }>('/api/auth/login/callback', { code, state }).pipe(
-      tap((res) => {
-        if (res.session_token) {
+      switchMap((res) => {
+        if (res?.session_token) {
           localStorage.setItem('session_token', res.session_token);
         }
-        this.checkSession();
+        return this.checkSession();
       })
     );
   }

@@ -7,11 +7,13 @@
         <h2>LIVE STREAM CONNECTION</h2>
       </div>
       <div class="status-indicator">
-        @if (assistant.status().state === 'LIVE' || activeVideoTitle) {
+        @if (assistant.status().state === 'LIVE') {
           <span class="badge-live"><span class="pulse-dot"></span> LIVE ASSISTANT ACTIVE</span>
-          <button class="btn-danger stop-btn-sm" (click)="onStopAssistant()" [disabled]="stopping">
-            🛑 Stop Assistant
-          </button>
+          @if (!activeVideoTitle) {
+            <button class="btn-danger stop-btn-sm" (click)="onStopAssistant()" [disabled]="stopping" aria-label="Stop live assistant">
+              {{ stopping ? '⏳ Stopping...' : '🛑 Stop Assistant' }}
+            </button>
+          }
         } @else {
           <span class="badge-idle">⏸️ ASSISTANT IDLE</span>
         }
@@ -24,6 +26,7 @@
           type="text"
           class="input-glass"
           placeholder="Paste YouTube Video URL or Video ID (e.g. umkwDoV6lPk)"
+          aria-label="YouTube Video URL or Video ID"
           [(ngModel)]="videoInput"
           [disabled]="connecting"
         />
@@ -50,11 +53,11 @@
                 (click)="onStartAssistant()"
                 [disabled]="starting"
               >
-                ▶️ Start Assistant
+                {{ starting ? '⏳ Starting...' : '▶️ Start Assistant' }}
               </button>
             } @else {
-              <button class="btn-danger stop-btn" (click)="onStopAssistant()" [disabled]="stopping">
-                🛑 Stop Assistant
+              <button class="btn-danger stop-btn" (click)="onStopAssistant()" [disabled]="stopping" aria-label="Stop live assistant">
+                {{ stopping ? '⏳ Stopping...' : '🛑 Stop Assistant' }}
               </button>
             }
           </div>

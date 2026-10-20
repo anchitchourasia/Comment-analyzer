@@ -1,21 +1,36 @@
 .app-layout {
   min-height: 100vh;
   padding: 16px;
+  display: flex;
+  flex-direction: column;
 }
 
 .body-layout {
   display: flex;
   gap: 20px;
   align-items: flex-start;
+  width: 100%;
 }
 
 .content-area {
   flex: 1;
   min-width: 0;
+  width: 100%;
 }
 
 .full-area {
   width: 100%;
+  min-width: 0;
+}
+
+@media (max-width: 900px) {
+  .app-layout {
+    padding: 12px 8px;
+  }
+  .body-layout {
+    flex-direction: column;
+    gap: 16px;
+  }
 }
 
 .global-loader-container {

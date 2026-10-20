@@ -3,7 +3,7 @@
   <header class="page-header glass-card">
     <div class="header-left">
       <div class="title-row">
-        <span class="page-icon">⚡</span>
+        <span class="page-icon" aria-hidden="true">⚡</span>
         <h2>LIVE Q&A MODERATION QUEUE</h2>
       </div>
       <p class="page-subtitle">Real-time viewer question queue & AI-suggested answers</p>
@@ -18,150 +18,320 @@
         }
       </div>
 
+      <a routerLink="/qa-library" class="btn-secondary memory-nav-btn" title="Open approved Q&A Memory Bank">
+        🧠 Q&A Memory Bank ➔
+      </a>
+
       <a routerLink="/dashboard" class="btn-secondary back-btn">
         🎛️ Back to Dashboard
       </a>
     </div>
   </header>
-  <!-- Auto-Responder Keyword System Panel -->
-  <section class="auto-responder-panel glass-card">
-    <div class="section-title-bar">
-      <div class="title-wrap">
-        <h3>🤖 LIVE CHAT AUTO-RESPONDER (KEYWORD TRIGGERS)</h3>
-        <span class="count-pill badge-live">{{ qa.records().length }} Active Triggers</span>
-      </div>
-      <div class="ar-actions-top">
-        <button class="btn-primary" (click)="showAutoResponderForm = !showAutoResponderForm; editingTriggerId = null;">
-          {{ showAutoResponderForm ? '✖️ Close Form' : '➕ Add Keyword Trigger' }}
-        </button>
-      </div>
-    </div>
 
-    <div class="ar-notice">
-      ℹ️ <strong>100% Real-Time System:</strong> Enter any custom keywords and answers below or convert incoming viewer questions in real-time. Active triggers detect matching messages live from YouTube Chat and automatically clear when you stop the stream.
-    </div>
-
-    <!-- Keyword Trigger Add/Edit Form -->
-    @if (showAutoResponderForm) {
-      <div class="trigger-form-card glass-card">
-        <h4>{{ editingTriggerId ? '✏️ Edit Keyword Auto-Response Trigger' : '➕ Create New Keyword Auto-Response Trigger' }}</h4>
-        <div class="form-grid">
-          <div class="form-group">
-            <label>Trigger Question / Title Name:</label>
-            <input type="text" class="input-glass" [(ngModel)]="triggerTitle" placeholder="e.g. PC Specs, Stream Schedule, Discord" />
-          </div>
-
-          <div class="form-group">
-            <label>Trigger Keywords (comma separated):</label>
-            <input type="text" class="input-glass" [(ngModel)]="triggerKeywords" placeholder="e.g. pc specs, specs, hardware, pc setup, what is your pc specs" />
-            <small class="form-help">Matches any incoming live chat containing these keywords.</small>
-          </div>
-
-          <div class="form-group">
-            <label>Cooldown Period (Seconds):</label>
-            <input type="number" class="input-glass" [(ngModel)]="triggerCooldown" min="0" placeholder="e.g. 60" />
-            <small class="form-help">Prevents spamming: auto-trigger will wait this time before replying again.</small>
-          </div>
-
-          <div class="form-group full-width">
-            <label>Saved Auto-Response Text (Sent directly to YouTube Live Chat):</label>
-            <textarea class="input-glass answer-textarea" rows="2" [(ngModel)]="triggerAnswer" placeholder="e.g. PC Specs: RTX 4090 GPU, Intel i9-14900K CPU, 64GB DDR5 RAM..."></textarea>
-          </div>
-
-          <div class="form-group-checkbox">
-            <label class="checkbox-label">
-              <input type="checkbox" [(ngModel)]="triggerAutoReply" />
-              <span>⚡ Enable Auto-Posting (Automatically send to YouTube Live Chat when detected)</span>
-            </label>
-          </div>
+  <!-- Main Operational Workspace: Incoming Live Queue & AI Suggestions First -->
+  <div class="qa-workspace">
+    <!-- Pending Questions Section -->
+    <section class="queue-section glass-card" aria-label="Live Incoming Questions">
+      <div class="section-title-bar">
+        <div class="title-wrap">
+          <h3>🙋 NEW QUESTIONS FROM CHAT</h3>
+          <span class="count-pill">{{ pendingKeys().length }}</span>
         </div>
-
-        <div class="form-buttons">
-          <button class="btn-secondary" (click)="resetTriggerForm()">Cancel</button>
-          <button class="btn-primary" (click)="onSaveCustomKeywordTrigger()">
-            {{ editingTriggerId ? '💾 Save Changes' : '➕ Save Trigger Rule' }}
+        <div class="queue-sort-group">
+          <button 
+            type="button" 
+            class="sort-pill-btn" 
+            [class.active]="pendingSortMode === 'recent'" 
+            (click)="pendingSortMode = 'recent'"
+            title="Sort by newest incoming message"
+          >
+            ⏱️ Recent
+          </button>
+          <button 
+            type="button" 
+            class="sort-pill-btn" 
+            [class.active]="pendingSortMode === 'frequency'" 
+            (click)="pendingSortMode = 'frequency'"
+            title="Sort by most frequently asked"
+          >
+            🔥 Most Frequent
           </button>
         </div>
       </div>
-    }
 
-    <!-- Active Triggers Grid -->
-    @if (qa.records().length === 0) {
-      <div class="empty-triggers">
-        <p>No active keyword triggers configured for this stream.</p>
-        <span class="empty-sub">Click <strong>"Add Default PC Specs Trigger"</strong> or <strong>"Add Custom Keyword Trigger"</strong> above to auto-reply to viewers instantly!</span>
-      </div>
-    } @else {
-      <div class="triggers-grid">
-        @for (record of qa.records(); track record.id) {
-          <div class="trigger-card glass-card" [id]="'trigger-' + record.id" [class.highlight-pulse]="highlightedTriggerId === record.id">
-            <div class="trigger-card-header">
-              <span class="trigger-title">❓ {{ record.normalized_question | uppercase }}</span>
-              <div class="trigger-header-badges">
-                <span class="cooldown-badge">⏱️ {{ record.cooldown_seconds !== undefined && record.cooldown_seconds !== null ? record.cooldown_seconds : 60 }}s Cooldown</span>
-                <span class="auto-badge" [class.enabled]="record.auto_reply">
-                  {{ record.auto_reply ? '⚡ Auto-Posting ON' : '⏸️ Manual' }}
-                </span>
+      @if (assistant.loadingPending()) {
+        <div class="loading-box">
+          <span class="pulse-text">Loading pending viewer questions...</span>
+        </div>
+      } @else if (!auth.hasChannelSelected()) {
+        <div class="empty-state">
+          <div class="empty-icon">📺</div>
+          <p>Select a connected channel and active live stream to load the live assistant.</p>
+          <span class="empty-sub">Connect your YouTube channel in settings to get started.</span>
+        </div>
+      } @else if (pendingKeys().length === 0) {
+        <div class="empty-state">
+          <div class="empty-icon">💬</div>
+          <p>No unaddressed viewer questions in queue.</p>
+          <span class="empty-sub">Questions detected during live chat polling will appear here in real-time.</span>
+        </div>
+      } @else {
+        <div class="questions-list">
+          @for (key of pendingKeys(); track key) {
+            @if (assistant.pendingQuestions()[key]; as entry) {
+              <div class="question-card glass-card">
+                <div class="card-top">
+                  <div class="question-main">
+                    <span class="question-key-label">{{ entry.displayText }}</span>
+                    <div class="ask-meta">
+                      <span class="ask-count">Asked {{ entry.count }} times</span>
+                      @if (entry.status) {
+                        <span class="status-tag" [ngClass]="entry.status">{{ entry.status }}</span>
+                      }
+                    </div>
+                  </div>
+                </div>
+
+                @if (entry.status === 'failed' || entry.error) {
+                  <div class="card-error-banner" role="alert">
+                    ⚠️ {{ entry.error || 'Post rejected by YouTube API. Google account is not authorized to post in this live chat.' }}
+                  </div>
+                }
+
+                <!-- Occurrence Selector Dropdown if multiple occurrences exist -->
+                @if (entry.occurrences && entry.occurrences.length > 1) {
+                  <div class="occurrence-selector">
+                    <label [for]="'occ-select-' + key">Viewer Phrasings ({{ entry.occurrences.length }}):</label>
+                    <select [id]="'occ-select-' + key" [(ngModel)]="selectedOccurrences[key]" class="input-glass select-occ">
+                      @for (occ of entry.occurrences; track occ.occurrenceId) {
+                        <option [value]="occ.occurrenceId">
+                          "{{ occ.text }}" — {{ occ.authorName }}
+                        </option>
+                      }
+                    </select>
+                  </div>
+                }
+
+                <!-- Answer Composer Textarea -->
+                <div class="answer-composer">
+                  <textarea 
+                    class="input-glass answer-textarea" 
+                    rows="2" 
+                    placeholder="Type response to send to YouTube Live Chat..."
+                    aria-label="Answer response text"
+                    [(ngModel)]="answerTexts[key]"
+                  ></textarea>
+
+                  <div class="composer-toolbar">
+                    <button 
+                      type="button"
+                      class="btn-secondary ai-draft-btn" 
+                      (click)="onGetAiDraft(entry.displayText, key)"
+                      [disabled]="assistant.loadingAiDraftKey() === key"
+                      title="Generate an AI draft answer using context"
+                    >
+                      {{ assistant.loadingAiDraftKey() === key ? '✨ Drafting...' : '✨ AI Draft' }}
+                    </button>
+
+                    <div class="post-buttons">
+                      <button 
+                        type="button"
+                        class="btn-secondary auto-responder-convert-btn" 
+                        (click)="onQuickAddTriggerFromPending(entry.displayText, key)"
+                        title="Configure an automatic keyword trigger for this question"
+                      >
+                        ⚡ Add Auto-Trigger
+                      </button>
+
+                      <button 
+                        type="button"
+                        class="btn-secondary save-only-btn" 
+                        (click)="onSaveApproveOnly(entry.displayText, answerTexts[key], key)"
+                        [disabled]="savingQuestionKey === key"
+                        title="Save answer to Q&A Memory bank without posting to live chat"
+                      >
+                        {{ savingQuestionKey === key ? '💾 Saving...' : '💾 Save to Q&A Memory' }}
+                      </button>
+
+                      <button 
+                        type="button"
+                        class="btn-primary save-post-btn" 
+                        (click)="onSaveAndPostNow(entry, key)"
+                        [disabled]="assistant.postingQuestionKey() === key || savingQuestionKey === key || !answerTexts[key]"
+                        title="Post answer directly to YouTube Live Chat"
+                      >
+                        {{ assistant.postingQuestionKey() === key ? '🚀 Posting...' : '🚀 Save & Post to Chat' }}
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
-
-            <div class="keywords-wrap">
-              <span class="kw-label">Keywords:</span>
-              @for (kw of (record.original_question_examples || record.example_phrasings || [record.normalized_question]); track kw) {
-                <span class="kw-tag">{{ kw }}</span>
-              }
-            </div>
-
-            <div class="response-preview">
-              <span class="res-label">Saved Response:</span>
-              <p class="res-text">"{{ record.answer_text }}"</p>
-            </div>
-
-            <div class="trigger-card-actions">
-              <button class="btn-secondary edit-btn" (click)="onEditTrigger(record)">✏️ Edit</button>
-              <button class="btn-secondary delete-btn" (click)="onDeleteTrigger(record.id)">🗑️ Delete</button>
-            </div>
-          </div>
-        }
-      </div>
-    }
-
-    <!-- Interactive Live Match Tester -->
-    <div class="trigger-tester-box glass-card">
-      <div class="tester-header">
-        <h4>🧪 Test Live Chat Keyword Detection</h4>
-        <span class="tester-sub">Simulate a viewer live chat message to verify keyword detection & response</span>
-      </div>
-
-      <div class="tester-input-row">
-        <input type="text" class="input-glass tester-input" [(ngModel)]="testInputText" placeholder="e.g. hey streamer what is your pc specs?" (keyup.enter)="onTestKeywordDetection()" />
-        <button class="btn-primary" (click)="onTestKeywordDetection()" [disabled]="testingMatcher">
-          {{ testingMatcher ? 'Testing...' : '🔍 Test Detection' }}
-        </button>
-      </div>
-
-      @if (testResult) {
-        <div class="test-result-card" [class.matched]="testResult.score >= 0.8">
-          <div class="result-top">
-            <span class="result-status">
-              {{ testResult.score >= 0.8 ? '✅ MATCH DETECTED (' + (testResult.score * 100).toFixed(0) + '%)' : '❌ NO KEYWORD MATCH' }}
-            </span>
-          </div>
-
-          @if (testResult.matched_record) {
-            <div class="result-details">
-              <p><strong>Matched Trigger:</strong> {{ testResult.matched_record.normalized_question }}</p>
-              <p><strong>Auto-Response to Live Chat:</strong> "{{ testResult.matched_record.answer_text }}"</p>
-            </div>
-          } @else {
-            <p class="result-no-match">No keyword trigger matched this message.</p>
+            }
           }
         </div>
       }
-    </div>
-  </section>
+    </section>
 
-  <!-- Frequent Questions Analysis Panel (Analyzed from NEW QUESTIONS FROM CHAT) -->
+    <!-- Suggestions Column / Side Layout -->
+    <div class="suggestions-column">
+      <!-- High Confidence Match Suggestions (>= 80%) -->
+      <section class="suggestions-section glass-card high-conf" aria-label="High Confidence Suggestions">
+        <div class="section-title-bar">
+          <div class="title-wrap">
+            <h3>⚡ HIGH CONFIDENCE SUGGESTIONS (≥ 80%)</h3>
+            <span class="count-pill badge-high">{{ assistant.highConfidenceSuggestions().length }}</span>
+          </div>
+        </div>
+
+        @if (assistant.highConfidenceSuggestions().length === 0) {
+          <div class="empty-suggestions">
+            <p>No high-confidence suggestions detected yet.</p>
+          </div>
+        } @else {
+          <div class="suggestions-list">
+            @for (sugg of assistant.highConfidenceSuggestions(); track sugg.id) {
+              <div class="suggestion-card glass-card">
+                <div class="sugg-header">
+                  <div class="sugg-header-left">
+                    <span class="user-ask">"{{ sugg.questionText }}"</span>
+                    @if (sugg.autoReply || sugg.isKeywordTrigger) {
+                      <span class="badge-keyword-trigger">🤖 KEYWORD TRIGGER (Auto-Sending Live)</span>
+                    }
+                  </div>
+                  <span class="confidence-score high">Score: {{ sugg.scorePercentage }}%</span>
+                </div>
+
+                <div class="matched-answer-preview">
+                  <div class="preview-header">
+                    <span class="preview-label">Suggested Answer:</span>
+                    @if (editingSuggestions[sugg.id]) {
+                      <span class="editing-tag">✏️ Editing Mode</span>
+                    }
+                  </div>
+                  @if (editingSuggestions[sugg.id]) {
+                    <textarea 
+                      class="input-glass answer-textarea sugg-edit-textarea" 
+                      rows="2" 
+                      [ngModel]="getSuggestionAnswer(sugg)"
+                      (ngModelChange)="onSuggestionAnswerChange(sugg.id, $event)"
+                      placeholder="Edit suggested response before posting..."
+                    ></textarea>
+                  } @else {
+                    <p class="answer-text-display">"{{ getSuggestionAnswer(sugg) }}"</p>
+                  }
+                </div>
+
+                <div class="sugg-actions">
+                  <span class="sugg-author">Asked by: {{ sugg.authorName }}</span>
+                  <div class="sugg-btn-group">
+                    <button 
+                      type="button"
+                      class="btn-secondary edit-toggle-btn" 
+                      (click)="toggleEditSuggestion(sugg)"
+                    >
+                      {{ editingSuggestions[sugg.id] ? '✖️ Cancel' : '✏️ Edit Answer' }}
+                    </button>
+                    <button 
+                      type="button"
+                      class="btn-secondary dismiss-btn" 
+                      (click)="onDismissSuggestion(sugg)"
+                    >
+                      🗑️ Dismiss
+                    </button>
+                    <button 
+                      type="button"
+                      class="btn-primary" 
+                      (click)="onPostSuggestion(sugg)"
+                      [disabled]="assistant.postingQuestionKey() === (sugg.recordId || sugg.questionText)"
+                    >
+                      {{ (sugg.autoReply || sugg.isKeywordTrigger) ? '⚡ Auto-Send to Chat' : '🚀 Post to Chat' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </section>
+
+      <!-- Medium Confidence Match Suggestions (50% - 79%) -->
+      <section class="suggestions-section glass-card" aria-label="Medium Confidence Suggestions">
+        <div class="section-title-bar">
+          <div class="title-wrap">
+            <h3>💡 MEDIUM CONFIDENCE SUGGESTIONS (50% - 79%)</h3>
+            <span class="count-pill badge-medium">{{ assistant.mediumConfidenceSuggestions().length }}</span>
+          </div>
+        </div>
+
+        @if (assistant.mediumConfidenceSuggestions().length === 0) {
+          <div class="empty-suggestions">
+            <p>No medium-confidence suggestions for this stream.</p>
+          </div>
+        } @else {
+          <div class="suggestions-list">
+            @for (sugg of assistant.mediumConfidenceSuggestions(); track sugg.id) {
+              <div class="suggestion-card glass-card">
+                <div class="sugg-header">
+                  <span class="user-ask">"{{ sugg.questionText }}"</span>
+                  <span class="confidence-score medium">Score: {{ sugg.scorePercentage }}%</span>
+                </div>
+
+                <div class="matched-answer-preview">
+                  <div class="preview-header">
+                    <span class="preview-label">Suggested Answer:</span>
+                    @if (editingSuggestions[sugg.id]) {
+                      <span class="editing-tag">✏️ Editing Mode</span>
+                    }
+                  </div>
+                  @if (editingSuggestions[sugg.id]) {
+                    <textarea 
+                      class="input-glass answer-textarea sugg-edit-textarea" 
+                      rows="2" 
+                      [ngModel]="getSuggestionAnswer(sugg)"
+                      (ngModelChange)="onSuggestionAnswerChange(sugg.id, $event)"
+                      placeholder="Edit suggested response before posting..."
+                    ></textarea>
+                  } @else {
+                    <p class="answer-text-display">"{{ getSuggestionAnswer(sugg) }}"</p>
+                  }
+                </div>
+
+                <div class="sugg-actions">
+                  <span class="sugg-author">Asked by: {{ sugg.authorName }}</span>
+                  <div class="sugg-btn-group">
+                    <button 
+                      type="button"
+                      class="btn-secondary edit-toggle-btn" 
+                      (click)="toggleEditSuggestion(sugg)"
+                    >
+                      {{ editingSuggestions[sugg.id] ? '✖️ Cancel' : '✏️ Edit Answer' }}
+                    </button>
+                    <button 
+                      type="button"
+                      class="btn-secondary dismiss-btn" 
+                      (click)="onDismissSuggestion(sugg)"
+                    >
+                      🗑️ Dismiss
+                    </button>
+                    <button 
+                      type="button"
+                      class="btn-primary" 
+                      (click)="onPostSuggestion(sugg)"
+                      [disabled]="assistant.postingQuestionKey() === (sugg.recordId || sugg.questionText)"
+                    >
+                      🚀 Post to Chat
+                    </button>
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+        }
+      </section>
+    </div>
+  </div>
+
+  <!-- Frequent Questions Analysis Panel (Collapsible below live operations) -->
   <section class="frequent-analysis-panel glass-card">
     <div class="section-title-bar">
       <div class="title-wrap">
@@ -207,18 +377,18 @@
       </div>
     </div>
 
-    <div class="analysis-notice">
-      📊 <strong>Automated Streamer Pattern Analysis:</strong> Evaluates incoming viewer questions from <strong>NEW QUESTIONS FROM CHAT</strong>, calculates repeat frequencies, extracts trigger keywords, and lets you add them directly to your <strong>Live Chat Auto-Responder</strong> with 1 click!
-    </div>
-
     @if (showFrequentAnalysis) {
+      <div class="analysis-notice">
+        📊 <strong>Streamer Pattern Analysis:</strong> Analyzes incoming questions, ranks repeat volume, and lets you add 1-click auto-triggers.
+      </div>
+
       <!-- Summary Metrics Row -->
       <div class="frequent-metrics-strip">
         <div class="freq-metric-card">
           <span class="fm-icon">💬</span>
           <div class="fm-content">
             <span class="fm-value">{{ totalChatQuestionsCount() }}</span>
-            <span class="fm-label">Total Viewer Inquiries</span>
+            <span class="fm-label">Total Inquiries</span>
           </div>
         </div>
 
@@ -255,7 +425,7 @@
           <span class="empty-icon">💬</span>
           <p>No questions matching this filter yet.</p>
           <span class="empty-sub">
-            Questions detected from your YouTube live chat will automatically be analyzed and ranked by frequency here.
+            Questions detected from your live chat will automatically be ranked by frequency here.
           </span>
         </div>
       } @else {
@@ -315,7 +485,7 @@
                     <div class="ar-active-banner">
                       <div class="active-banner-text">
                         <span>🤖 <strong>Active Keyword Trigger:</strong> "{{ item.matchedTriggerTitle }}"</span>
-                        <small>This question is already automatically answered by your Live Chat Auto-Responder!</small>
+                        <small>This question is automatically answered by your Live Chat Auto-Responder!</small>
                       </div>
                       @if (item.matchedTriggerId) {
                         <button type="button" class="btn-secondary btn-sm" (click)="onScrollToTrigger(item.matchedTriggerId!)">
@@ -357,9 +527,9 @@
 
                         <button 
                           type="button"
-                          class="btn-secondary customize-btn"
+                          class="btn-secondary customize-btn" 
                           (click)="onCustomizeTriggerFromFrequent(item)"
-                          title="Open the top trigger form to customize cooldown or keywords"
+                          title="Open trigger form to customize cooldown or keywords"
                         >
                           ✏️ Customize in Form
                         </button>
@@ -375,291 +545,159 @@
     }
   </section>
 
-  <!-- Content Grid -->
-  <div class="qa-workspace">
-    <!-- Pending Questions Section -->
-    <section class="queue-section glass-card">
-      <div class="section-title-bar">
-        <div class="title-wrap">
-          <h3>🙋 NEW QUESTIONS FROM CHAT</h3>
-          <span class="count-pill">{{ pendingKeys().length }}</span>
-        </div>
-        <div class="queue-sort-group">
-          <button 
-            type="button" 
-            class="sort-pill-btn" 
-            [class.active]="pendingSortMode === 'recent'" 
-            (click)="pendingSortMode = 'recent'"
-            title="Sort by newest incoming message"
-          >
-            ⏱️ Recent
-          </button>
-          <button 
-            type="button" 
-            class="sort-pill-btn" 
-            [class.active]="pendingSortMode === 'frequency'" 
-            (click)="pendingSortMode = 'frequency'"
-            title="Sort by most frequently asked"
-          >
-            🔥 Most Frequent
-          </button>
-        </div>
+  <!-- Auto-Responder Keyword System Panel (Collapsible below live operations) -->
+  <section id="auto-responder-panel" class="auto-responder-panel glass-card">
+    <div class="section-title-bar">
+      <div class="title-wrap">
+        <h3>🤖 LIVE CHAT AUTO-RESPONDER (KEYWORD TRIGGERS)</h3>
+        <span class="count-pill badge-live">{{ qa.records().length }} Active Triggers</span>
+      </div>
+      <div class="ar-actions-top">
+        <a routerLink="/qa-library" class="btn-secondary manage-memory-btn" title="Open approved Q&A Memory Bank">
+          🧠 Q&A Memory Bank ➔
+        </a>
+        <button type="button" class="btn-secondary" (click)="showAutoResponderSection = !showAutoResponderSection">
+          {{ showAutoResponderSection ? '▲ Hide Triggers' : '▼ Manage Triggers' }}
+        </button>
+      </div>
+    </div>
+
+    @if (showAutoResponderSection) {
+      <div class="ar-notice">
+        ℹ️ <strong>Real-Time Keyword Triggers:</strong> Incoming live chat containing these keywords will receive the configured auto-response. Manage permanent approved FAQs in <strong><a routerLink="/qa-library">Q&A Memory Bank</a></strong>.
       </div>
 
-      @if (assistant.loadingPending()) {
-        <div class="loading-box">
-          <span class="pulse-text">Loading pending viewer questions...</span>
+      <div class="ar-actions-sub">
+        <button type="button" class="btn-primary" (click)="showAutoResponderForm = !showAutoResponderForm; editingTriggerId = null;">
+          {{ showAutoResponderForm ? '✖️ Close Form' : '➕ Add Keyword Trigger' }}
+        </button>
+      </div>
+
+      <!-- Keyword Trigger Add/Edit Form -->
+      @if (showAutoResponderForm) {
+        <div class="trigger-form-card glass-card">
+          <h4>{{ editingTriggerId ? '✏️ Edit Keyword Auto-Response Trigger' : '➕ Create New Keyword Auto-Response Trigger' }}</h4>
+          <div class="form-grid">
+            <div class="form-group">
+              <label for="triggerTitleInput">Trigger Question / Title Name:</label>
+              <input id="triggerTitleInput" type="text" class="input-glass" [(ngModel)]="triggerTitle" placeholder="e.g. PC Specs, Stream Schedule, Discord" />
+            </div>
+
+            <div class="form-group">
+              <label for="triggerKeywordsInput">Trigger Keywords (comma separated):</label>
+              <input id="triggerKeywordsInput" type="text" class="input-glass" [(ngModel)]="triggerKeywords" placeholder="e.g. pc specs, specs, hardware, pc setup" />
+              <small class="form-help">Matches any incoming live chat containing these keywords.</small>
+            </div>
+
+            <div class="form-group">
+              <label for="triggerCooldownInput">Cooldown Period (Seconds):</label>
+              <input id="triggerCooldownInput" type="number" class="input-glass" [(ngModel)]="triggerCooldown" min="0" placeholder="e.g. 60" />
+              <small class="form-help">Prevents spamming: auto-trigger will wait this time before replying again.</small>
+            </div>
+
+            <div class="form-group full-width">
+              <label for="triggerAnswerInput">Saved Auto-Response Text (Sent directly to YouTube Live Chat):</label>
+              <textarea id="triggerAnswerInput" class="input-glass answer-textarea" rows="2" [(ngModel)]="triggerAnswer" placeholder="e.g. PC Specs: RTX 4090 GPU, Intel i9-14900K CPU, 64GB DDR5 RAM..."></textarea>
+            </div>
+
+            <div class="form-group-checkbox">
+              <label class="checkbox-label" for="triggerAutoReplyCb">
+                <input id="triggerAutoReplyCb" type="checkbox" [(ngModel)]="triggerAutoReply" />
+                <span>⚡ Enable Auto-Posting (Automatically send to YouTube Live Chat when detected)</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="form-buttons">
+            <button type="button" class="btn-secondary" (click)="resetTriggerForm()">Cancel</button>
+            <button type="button" class="btn-primary" (click)="onSaveCustomKeywordTrigger()">
+              {{ editingTriggerId ? '💾 Save Changes' : '➕ Save Trigger Rule' }}
+            </button>
+          </div>
         </div>
-      } @else if (!auth.hasChannelSelected()) {
-        <div class="empty-state">
-          <div class="empty-icon">📺</div>
-          <p>Select a connected channel and active live stream to load the live assistant.</p>
-          <span class="empty-sub">Connect your YouTube channel in settings to get started.</span>
-        </div>
-      } @else if (pendingKeys().length === 0) {
-        <div class="empty-state">
-          <div class="empty-icon">💬</div>
-          <p>No unaddressed viewer questions in queue.</p>
-          <span class="empty-sub">Questions detected during live chat polling will appear here.</span>
+      }
+
+      <!-- Active Triggers Grid -->
+      @if (qa.records().length === 0) {
+        <div class="empty-triggers">
+          <p>No active keyword triggers configured for this stream.</p>
+          <span class="empty-sub">Click <strong>"➕ Add Keyword Trigger"</strong> above or convert incoming questions directly from the queue!</span>
         </div>
       } @else {
-        <div class="questions-list">
-          @for (key of pendingKeys(); track key) {
-            @if (assistant.pendingQuestions()[key]; as entry) {
-              <div class="question-card glass-card">
-                <div class="card-top">
-                  <div class="question-main">
-                    <span class="question-key-label">{{ entry.displayText }}</span>
-                    <div class="ask-meta">
-                      <span class="ask-count">Asked {{ entry.count }} times</span>
-                      @if (entry.status) {
-                        <span class="status-tag" [ngClass]="entry.status">{{ entry.status }}</span>
-                      }
-                    </div>
-                  </div>
-                </div>
-
-                @if (entry.status === 'failed' || entry.error) {
-                  <div class="card-error-banner">
-                    ⚠️ {{ entry.error || 'Post rejected by YouTube API. Google account is not authorized to post in this live chat. Ask channel owner to add it as a moderator.' }}
-                  </div>
-                }
-
-                <!-- Occurrence Selector Dropdown if multiple occurrences exist -->
-                @if (entry.occurrences && entry.occurrences.length > 1) {
-                  <div class="occurrence-selector">
-                    <label>Viewer Phrasings ({{ entry.occurrences.length }}):</label>
-                    <select [(ngModel)]="selectedOccurrences[key]" class="input-glass select-occ">
-                      @for (occ of entry.occurrences; track occ.occurrenceId) {
-                        <option [value]="occ.occurrenceId">
-                          "{{ occ.text }}" — {{ occ.authorName }}
-                        </option>
-                      }
-                    </select>
-                  </div>
-                }
-
-                <!-- Answer Composer Textarea -->
-                <div class="answer-composer">
-                  <textarea 
-                    class="input-glass answer-textarea" 
-                    rows="2" 
-                    placeholder="Type approved response to send to YouTube Live Chat..."
-                    [(ngModel)]="answerTexts[key]"
-                  ></textarea>
-
-                  <div class="composer-toolbar">
-                    <button 
-                      class="btn-secondary ai-draft-btn" 
-                      (click)="onGetAiDraft(entry.displayText, key)"
-                      [disabled]="assistant.loadingAiDraftKey() === key"
-                    >
-                      {{ assistant.loadingAiDraftKey() === key ? '✨ Drafting...' : '✨ Get AI Draft' }}
-                    </button>
-
-                    <div class="post-buttons">
-                      <button 
-                        class="btn-secondary auto-responder-convert-btn" 
-                        (click)="onQuickAddTriggerFromPending(entry.displayText, key)"
-                        title="Convert this real-time question into an auto-responder keyword trigger"
-                      >
-                        ⚡ Save as Auto-Responder
-                      </button>
-
-                      <button 
-                        class="btn-secondary save-only-btn" 
-                        (click)="onSaveApproveOnly(entry.displayText, answerTexts[key], key)"
-                      >
-                        💾 Save & Approve
-                      </button>
-
-                      <button 
-                        class="btn-primary save-post-btn" 
-                        (click)="onSaveAndPostNow(entry, key)"
-                        [disabled]="assistant.postingQuestionKey() === key || !answerTexts[key]"
-                      >
-                        {{ assistant.postingQuestionKey() === key ? '🚀 Posting...' : '🚀 Save & Post Now' }}
-                      </button>
-                    </div>
-                  </div>
+        <div class="triggers-grid">
+          @for (record of qa.records(); track record.id) {
+            <div class="trigger-card glass-card" [id]="'trigger-' + record.id" [class.highlight-pulse]="highlightedTriggerId === record.id">
+              <div class="trigger-card-header">
+                <span class="trigger-title">❓ {{ record.normalized_question | uppercase }}</span>
+                <div class="trigger-header-badges">
+                  <span class="cooldown-badge">⏱️ {{ record.cooldown_seconds !== undefined && record.cooldown_seconds !== null ? record.cooldown_seconds : 60 }}s Cooldown</span>
+                  <span class="auto-badge" [class.enabled]="record.auto_reply">
+                    {{ record.auto_reply ? '⚡ Auto-Posting ON' : '⏸️ Manual' }}
+                  </span>
                 </div>
               </div>
-            }
+
+              <div class="keywords-wrap">
+                <span class="kw-label">Keywords:</span>
+                @for (kw of (record.original_question_examples || record.example_phrasings || [record.normalized_question]); track kw) {
+                  <span class="kw-tag">{{ kw }}</span>
+                }
+              </div>
+
+              <div class="response-preview">
+                <span class="res-label">Saved Response:</span>
+                <p class="res-text">"{{ record.answer_text }}"</p>
+              </div>
+
+              <div class="trigger-card-actions">
+                <button type="button" class="btn-secondary edit-btn" (click)="onEditTrigger(record)">✏️ Edit</button>
+                <button type="button" class="btn-secondary delete-btn" (click)="onDeleteTrigger(record.id)">🗑️ Delete</button>
+              </div>
+            </div>
           }
         </div>
       }
-    </section>
 
-    <!-- Suggestions Column / Side Layout -->
-    <div class="suggestions-column">
-      <!-- High Confidence Match Suggestions (>= 80%) -->
-      <section class="suggestions-section glass-card high-conf">
-        <div class="section-title-bar">
-          <div class="title-wrap">
-            <h3>⚡ HIGH CONFIDENCE SUGGESTIONS (≥ 80%)</h3>
-            <span class="count-pill badge-high">{{ assistant.highConfidenceSuggestions().length }}</span>
-          </div>
+      <!-- Interactive Live Match Tester -->
+      <div class="trigger-tester-box glass-card">
+        <div class="tester-header">
+          <h4>🧪 Test Live Chat Keyword Detection</h4>
+          <span class="tester-sub">Simulates viewer message matching without posting to live chat or modifying memory.</span>
         </div>
 
-        @if (assistant.highConfidenceSuggestions().length === 0) {
-          <div class="empty-suggestions">
-            <p>No high-confidence suggestions detected yet.</p>
-          </div>
-        } @else {
-          <div class="suggestions-list">
-            @for (sugg of assistant.highConfidenceSuggestions(); track sugg.id) {
-              <div class="suggestion-card glass-card">
-                <div class="sugg-header">
-                  <div class="sugg-header-left">
-                    <span class="user-ask">"{{ sugg.questionText }}"</span>
-                    @if (sugg.autoReply || sugg.isKeywordTrigger) {
-                      <span class="badge-keyword-trigger">🤖 KEYWORD TRIGGER (Auto-Sending Live)</span>
-                    }
-                  </div>
-                  <span class="confidence-score high">Score: {{ sugg.scorePercentage }}%</span>
-                </div>
+        <div class="tester-input-row">
+          <input 
+            type="text" 
+            class="input-glass tester-input" 
+            [(ngModel)]="testInputText" 
+            placeholder="e.g. hey streamer what is your pc specs?" 
+            aria-label="Test message for keyword detection"
+            (keyup.enter)="onTestKeywordDetection()" 
+          />
+          <button type="button" class="btn-primary" (click)="onTestKeywordDetection()" [disabled]="testingMatcher">
+            {{ testingMatcher ? 'Testing...' : '🔍 Test Detection' }}
+          </button>
+        </div>
 
-                <div class="matched-answer-preview">
-                  <div class="preview-header">
-                    <span class="preview-label">Suggested Answer:</span>
-                    @if (editingSuggestions[sugg.id]) {
-                      <span class="editing-tag">✏️ Editing Mode</span>
-                    }
-                  </div>
-                  @if (editingSuggestions[sugg.id]) {
-                    <textarea 
-                      class="input-glass answer-textarea sugg-edit-textarea" 
-                      rows="2" 
-                      [ngModel]="getSuggestionAnswer(sugg)"
-                      (ngModelChange)="onSuggestionAnswerChange(sugg.id, $event)"
-                      placeholder="Edit suggested response before posting..."
-                    ></textarea>
-                  } @else {
-                    <p class="answer-text-display">"{{ getSuggestionAnswer(sugg) }}"</p>
-                  }
-                </div>
+        @if (testResult) {
+          <div class="test-result-card" [class.matched]="testResult.score >= 0.8">
+            <div class="result-top">
+              <span class="result-status">
+                {{ testResult.score >= 0.8 ? '✅ MATCH DETECTED (' + (testResult.score * 100).toFixed(0) + '%)' : '❌ NO KEYWORD MATCH' }}
+              </span>
+            </div>
 
-                <div class="sugg-actions">
-                  <span class="sugg-author">Asked by: {{ sugg.authorName }}</span>
-                  <div class="sugg-btn-group">
-                    <button 
-                      class="btn-secondary edit-toggle-btn" 
-                      (click)="toggleEditSuggestion(sugg)"
-                    >
-                      {{ editingSuggestions[sugg.id] ? '✖️ Cancel' : '✏️ Edit Answer' }}
-                    </button>
-                    <button 
-                      class="btn-secondary dismiss-btn" 
-                      (click)="onDismissSuggestion(sugg)"
-                    >
-                      🗑️ Dismiss
-                    </button>
-                    <button 
-                      class="btn-primary" 
-                      (click)="onPostSuggestion(sugg)"
-                      [disabled]="assistant.postingQuestionKey() === (sugg.recordId || sugg.questionText)"
-                    >
-                      {{ (sugg.autoReply || sugg.isKeywordTrigger) ? '⚡ Auto-Send Live Chat' : '🚀 Post Response' }}
-                    </button>
-                  </div>
-                </div>
+            @if (testResult.matched_record) {
+              <div class="result-details">
+                <p><strong>Matched Trigger:</strong> {{ testResult.matched_record.normalized_question }}</p>
+                <p><strong>Auto-Response to Live Chat:</strong> "{{ testResult.matched_record.answer_text }}"</p>
               </div>
+            } @else {
+              <p class="result-no-match">No keyword trigger matched this test message.</p>
             }
           </div>
         }
-      </section>
-
-      <!-- Medium Confidence Match Suggestions (50% - 79%) -->
-      <section class="suggestions-section glass-card">
-        <div class="section-title-bar">
-          <div class="title-wrap">
-            <h3>💡 MEDIUM CONFIDENCE SUGGESTIONS (50% - 79%)</h3>
-            <span class="count-pill badge-medium">{{ assistant.mediumConfidenceSuggestions().length }}</span>
-          </div>
-        </div>
-
-        @if (assistant.mediumConfidenceSuggestions().length === 0) {
-          <div class="empty-suggestions">
-            <p>No medium-confidence suggestions for this stream.</p>
-          </div>
-        } @else {
-          <div class="suggestions-list">
-            @for (sugg of assistant.mediumConfidenceSuggestions(); track sugg.id) {
-              <div class="suggestion-card glass-card">
-                <div class="sugg-header">
-                  <span class="user-ask">"{{ sugg.questionText }}"</span>
-                  <span class="confidence-score medium">Score: {{ sugg.scorePercentage }}%</span>
-                </div>
-
-                <div class="matched-answer-preview">
-                  <div class="preview-header">
-                    <span class="preview-label">Suggested Answer:</span>
-                    @if (editingSuggestions[sugg.id]) {
-                      <span class="editing-tag">✏️ Editing Mode</span>
-                    }
-                  </div>
-                  @if (editingSuggestions[sugg.id]) {
-                    <textarea 
-                      class="input-glass answer-textarea sugg-edit-textarea" 
-                      rows="2" 
-                      [ngModel]="getSuggestionAnswer(sugg)"
-                      (ngModelChange)="onSuggestionAnswerChange(sugg.id, $event)"
-                      placeholder="Edit suggested response before posting..."
-                    ></textarea>
-                  } @else {
-                    <p class="answer-text-display">"{{ getSuggestionAnswer(sugg) }}"</p>
-                  }
-                </div>
-
-                <div class="sugg-actions">
-                  <span class="sugg-author">Asked by: {{ sugg.authorName }}</span>
-                  <div class="sugg-btn-group">
-                    <button 
-                      class="btn-secondary edit-toggle-btn" 
-                      (click)="toggleEditSuggestion(sugg)"
-                    >
-                      {{ editingSuggestions[sugg.id] ? '✖️ Cancel' : '✏️ Edit Answer' }}
-                    </button>
-                    <button 
-                      class="btn-secondary dismiss-btn" 
-                      (click)="onDismissSuggestion(sugg)"
-                    >
-                      🗑️ Dismiss
-                    </button>
-                    <button 
-                      class="btn-primary" 
-                      (click)="onPostSuggestion(sugg)"
-                      [disabled]="assistant.postingQuestionKey() === (sugg.recordId || sugg.questionText)"
-                    >
-                      🚀 Post Response
-                    </button>
-                  </div>
-                </div>
-              </div>
-            }
-          </div>
-        }
-      </section>
-    </div>
-  </div>
+      </div>
+    }
+  </section>
 </div>

@@ -108,8 +108,9 @@ export class LiveQaComponent {
   // Frequent Questions Analysis State
   pendingSortMode: 'recent' | 'frequency' = 'recent';
   frequentFilter: 'all' | 'unconfigured' | 'repeated' = 'all';
-  showFrequentAnalysis = true;
+  showFrequentAnalysis = false;
   highlightedTriggerId: string | null = null;
+  savingQuestionKey: string | null = null;
 
   constructor() {
     effect(() => {
@@ -124,6 +125,7 @@ export class LiveQaComponent {
   }
 
   // Auto-Responder Keyword System State
+  showAutoResponderSection = false;
   showAutoResponderForm = false;
   editingTriggerId: string | null = null;
   triggerTitle = '';
@@ -254,34 +256,70 @@ export class LiveQaComponent {
   }
 
   onSaveApproveOnly(question: string, answer: string, key: string) {
-    delete this.answerTexts[key];
-    this.assistant.dismissPending(key).subscribe({
-      next: () => {
-        this.toast.success('Question Approved', 'Question removed from queue');
-      }
-    });
+    if (this.savingQuestionKey === key) return;
+    this.savingQuestionKey = key;
+
+    const trimmedAnswer = (answer || '').trim();
+    if (trimmedAnswer) {
+      // Save pre-approved answer to memory bank (auto_reply=false by default)
+      this.qa.saveMemory(question.trim(), trimmedAnswer, false).subscribe({
+        next: () => {
+          delete this.answerTexts[key];
+          this.assistant.dismissPending(key).subscribe({
+            next: () => {
+              this.savingQuestionKey = null;
+              this.toast.success('Saved to Q&A Memory', 'Answer saved to memory bank and removed from queue.');
+            },
+            error: () => {
+              this.savingQuestionKey = null;
+            }
+          });
+        },
+        error: () => {
+          this.savingQuestionKey = null;
+        }
+      });
+    } else {
+      delete this.answerTexts[key];
+      this.assistant.dismissPending(key).subscribe({
+        next: () => {
+          this.savingQuestionKey = null;
+          this.toast.success('Question Dismissed', 'Question removed from queue.');
+        },
+        error: () => {
+          this.savingQuestionKey = null;
+        }
+      });
+    }
   }
 
   onSaveAndPostNow(entry: PendingQuestionVM, key: string) {
     const answer = this.answerTexts[key];
-    if (!answer) {
+    if (!answer || !answer.trim()) {
       this.toast.error('Validation Error', 'Answer text cannot be empty');
       return;
     }
+    if (this.assistant.postingQuestionKey() === key || this.savingQuestionKey === key) {
+      return;
+    }
+    this.savingQuestionKey = key;
+
     const channelId = this.auth.user()?.selected_channel_id || 'UC_DEMO_CHANNEL';
     const occId = this.selectedOccurrences[key] || (entry.occurrences?.[0]?.occurrenceId);
     const qKey = entry.questionKey || key;
 
     this.assistant.postAnswer(channelId, {
-      answer_text: answer,
+      answer_text: answer.trim(),
       question_key: qKey,
       occurrence_id: occId
     }).subscribe({
       next: () => {
         delete this.answerTexts[key];
+        this.savingQuestionKey = null;
         this.assistant.fetchPending();
       },
       error: () => {
+        this.savingQuestionKey = null;
         this.assistant.fetchPending();
       }
     });
@@ -373,18 +411,25 @@ export class LiveQaComponent {
     this.triggerAnswer = this.answerTexts[item.questionKey] || '';
     this.triggerAutoReply = true;
     this.triggerCooldown = 60;
+    this.showAutoResponderSection = true;
     this.showAutoResponderForm = true;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => {
+      const panel = document.getElementById('auto-responder-panel');
+      if (panel) {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 50);
   }
 
   onScrollToTrigger(triggerId: string) {
+    this.showAutoResponderSection = true;
     this.highlightedTriggerId = triggerId;
-    const el = document.getElementById('trigger-' + triggerId);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    } else {
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
+    setTimeout(() => {
+      const el = document.getElementById('trigger-' + triggerId);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+    }, 50);
     setTimeout(() => {
       this.highlightedTriggerId = null;
     }, 3000);
@@ -401,8 +446,14 @@ export class LiveQaComponent {
     this.triggerKeywords = keywords.join(', ');
     this.triggerAutoReply = true;
     this.triggerCooldown = 60;
+    this.showAutoResponderSection = true;
     this.showAutoResponderForm = true;
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    setTimeout(() => {
+      const panel = document.getElementById('auto-responder-panel');
+      if (panel) {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }, 50);
   }
 
   onSaveCustomKeywordTrigger() {

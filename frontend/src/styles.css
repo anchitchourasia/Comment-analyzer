@@ -15,9 +15,9 @@
   --accent-rose: #ff3b5c;
   --accent-amber: #ffb800;
 
-  --text-main: #f3f4f6;
-  --text-muted: #9ca3af;
-  --text-dim: #6b7280;
+  --text-main: #f8fafc;
+  --text-muted: #cbd5e1;
+  --text-dim: #94a3b8;
 
   --gradient-primary: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
   --gradient-live: linear-gradient(135deg, #ff3b5c 0%, #ff6b8b 100%);
@@ -37,6 +37,11 @@
   padding: 0;
 }
 
+:focus-visible {
+  outline: 2px solid var(--accent-cyan);
+  outline-offset: 2px;
+}
+
 body {
   font-family: var(--font-sans);
   background-color: var(--bg-dark);
@@ -47,6 +52,16 @@ body {
   min-height: 100vh;
   overflow-x: hidden;
   line-height: 1.5;
+  word-break: break-word;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 /* Glassmorphism Card Styling */

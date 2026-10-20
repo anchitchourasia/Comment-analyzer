@@ -1,7 +1,7 @@
 <div class="app-layout">
   <app-toast></app-toast>
 
-  @if (auth.user()) {
+  @if (showAuthShell()) {
     <app-topbar></app-topbar>
     
     <div class="body-layout">
