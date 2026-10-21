@@ -24,6 +24,8 @@ import qa_engine
 import answer_poster
 import groq_service
 import pinecone_store
+from backend import semantic_retriever, semantic_pinecone, review_service
+from backend.embeddings.factory import get_embedding_provider
 from livechat_id_generator import get_live_chat_id, get_video_details
 
 
@@ -1182,31 +1184,78 @@ async def delete_qa_memory(record_id: str, user: UserSessionModel = Depends(get_
     qa_engine.delete_record(record_id, channel_id=ch_id)
     return {"status": "deleted"}
 
+@router.get("/api/semantic/status")
+async def get_semantic_status(user: UserSessionModel = Depends(get_optional_user)):
+    """Return Pinecone semantic vector index connectivity and active model info."""
+    ch_id = user.selected_channel_id if user else None
+    pinecone_stats = semantic_pinecone.get_semantic_pinecone_stats(channel_id=ch_id)
+    provider = get_embedding_provider()
+    return {
+        "pinecone": pinecone_stats,
+        "embedding_model": {
+            "name": provider.model_name,
+            "dimension": provider.dimension,
+            "provider_type": getattr(provider, "_provider_type", "unknown"),
+        },
+    }
+
 @router.post("/api/qa/test_matcher")
+@router.post("/api/qa/test-matcher")
 async def test_qa_matcher(payload: QaTestMatcherRequest, user: UserSessionModel = Depends(get_optional_user)):
-    ch_id = user.selected_channel_id or "UC_DEMO_CHANNEL"
-    match, score = qa_engine.find_best_answer(payload.question, channel_id=ch_id)
+    ch_id = user.selected_channel_id if (user and user.selected_channel_id) else None
+    if (not ch_id or ch_id == "UC_DEMO_CHANNEL") and not qa_engine.load_qa_data(channel_id=ch_id):
+        if qa_engine.load_qa_data(channel_id="UChKDb2Ge26Ux0EV5MhRY1RA"):
+            ch_id = "UChKDb2Ge26Ux0EV5MhRY1RA"
+        else:
+            ch_id = None
+    retriever = semantic_retriever.SemanticQARetriever()
+    sem_res = retriever.retrieve(payload.question, channel_id=ch_id, bypass_keyword_triggers=bool(getattr(payload, "bypass_keywords", False)))
+
+    match = sem_res.matched_record
+    score = sem_res.score
 
     ai_draft = ""
     ai_note = ""
+    ai_review = None
     try:
-        records = qa_engine.load_qa_data(channel_id=ch_id)
-        sugg_ans = match.get("answer_text") if (match and isinstance(match, dict)) else None
-        ai_res = groq_service.review_question(payload.question, suggested_answer=sugg_ans, records=records)
-        if ai_res and ai_res.get("ok"):
-            ai_draft = ai_res.get("answer", "")
-            ai_note = ai_res.get("note", "")
-        elif ai_res and ai_res.get("note"):
-            ai_note = ai_res.get("note", "")
-    except Exception:
-        pass
+        sugg_ans = match.get("answer_text", "") if (match and isinstance(match, dict)) else ""
+        cand_q = match.get("normalized_question", "") if (match and isinstance(match, dict)) else ""
+        rev_res = review_service.review_qa_candidate(
+            viewer_question=payload.question,
+            candidate_question=cand_q,
+            candidate_answer=sugg_ans,
+        )
+        ai_review = rev_res.to_dict()
+        if rev_res.outcome == "accept":
+            ai_draft = sugg_ans
+            ai_note = f"[{rev_res.provider.upper()} / {rev_res.model}] Verified match: {rev_res.reason}"
+        elif rev_res.outcome == "reject":
+            ai_note = f"[{rev_res.provider.upper()} / {rev_res.model}] Rejected: {rev_res.reason}"
+        elif rev_res.outcome == "ambiguous":
+            ai_note = f"[{rev_res.provider.upper()} / {rev_res.model}] Ambiguous: {rev_res.reason}"
+        else:
+            ai_note = f"[{rev_res.provider.upper()} / {rev_res.model}] Reviewer unavailable ({rev_res.error_type or 'error'}): {rev_res.reason}"
+    except Exception as e:
+        ai_note = f"Review exception: {str(e)}"
+
+    retrieval_source = "pinecone_vector_index" if sem_res.match_type == "semantic" else ("keyword_index" if sem_res.match_type == "exact_keyword" else sem_res.match_type)
 
     return {
         "question": payload.question,
         "matched_record": match,
         "score": score,
+        "match_type": sem_res.match_type,
+        "retrieval_source": retrieval_source,
+        "semantic_score": sem_res.semantic_score,
+        "lexical_score": sem_res.lexical_score,
+        "ranking_score": sem_res.ranking_score,
+        "model_name": sem_res.model_name,
+        "status": sem_res.status,
+        "fallback_reason": sem_res.fallback_reason,
+        "top_candidates": sem_res.top_candidates,
         "ai_draft": ai_draft,
-        "ai_note": ai_note
+        "ai_note": ai_note,
+        "ai_review": ai_review
     }
 
 # --- VIDEO COMMENTS ANALYTICS ENDPOINTS ---

@@ -104,11 +104,14 @@ export class QaService {
     );
   }
 
-  testMatcher(question: string) {
+  testMatcher(question: string, bypassKeywords = false) {
     if (!question || !question.trim()) {
       this.toast.error('Validation Error', 'Question is required for testing matcher');
       return throwError(() => new Error('Question is required'));
     }
-    return this.api.post<MatcherTestResult>('/api/qa/test_matcher', { question: question.trim() });
+    return this.api.post<MatcherTestResult>('/api/qa/test_matcher', {
+      question: question.trim(),
+      bypass_keywords: bypassKeywords,
+    });
   }
 }

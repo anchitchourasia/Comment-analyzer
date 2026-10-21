@@ -330,6 +330,46 @@ def _remember_example(record, question):
 # --- public operations ----------------------------------------------------------
 
 
+
+def _sync_semantic_record(record, channel_id):
+    if not channel_id or not isinstance(record, dict):
+        return
+    try:
+        from backend import semantic_pinecone
+        from backend.embeddings.factory import get_embedding_provider
+        from backend.semantic_retriever import preprocess_for_embedding
+        if semantic_pinecone.is_semantic_pinecone_available():
+            if record.get("status") == "approved":
+                provider = get_embedding_provider()
+                q_text = record.get("original_question_examples", [""])[0] or record.get("normalized_question", "")
+                vec = provider.embed_text(preprocess_for_embedding(q_text))
+                semantic_pinecone.upsert_semantic_vectors([{
+                    "id": record["id"],
+                    "values": vec,
+                    "metadata": {
+                        "record_id": record["id"],
+                        "normalized_question": record.get("normalized_question", ""),
+                        "model_name": provider.model_name,
+                        "schema_version": "semantic_v1",
+                        "channel_id": channel_id,
+                    }
+                }], channel_id=channel_id)
+            else:
+                semantic_pinecone.delete_semantic_vector(record["id"], channel_id=channel_id)
+    except Exception:
+        pass
+
+
+def _sync_semantic_delete(record_id, channel_id):
+    if not channel_id or not record_id:
+        return
+    try:
+        from backend import semantic_pinecone
+        if semantic_pinecone.is_semantic_pinecone_available():
+            semantic_pinecone.delete_semantic_vector(record_id, channel_id=channel_id)
+    except Exception:
+        pass
+
 def add_question_answer(question, answer, auto_reply=False,
                         status="approved", qa_data=None, channel_id=None, keywords=None,
                         cooldown_seconds=60):
@@ -375,6 +415,7 @@ def add_question_answer(question, answer, auto_reply=False,
                     _pc_store.upsert_record(record, channel_id=channel_id)
                 else:
                     save_qa_data(data, channel_id=channel_id)
+                _sync_semantic_record(record, channel_id)
                 return record
 
         record = {
@@ -395,6 +436,7 @@ def add_question_answer(question, answer, auto_reply=False,
             _pc_store.upsert_record(record, channel_id=channel_id)
         else:
             save_qa_data(data, channel_id=channel_id)
+        _sync_semantic_record(record, channel_id)
         return record
 
 
@@ -416,6 +458,7 @@ def mark_used(record_id, channel_id=None):
 
 def delete_record(record_id, channel_id=None):
     with QA_LOCK:
+        _sync_semantic_delete(record_id, channel_id)
         if QA_FILE is None and _pinecone_enabled():
             return _pc_store.delete_record(record_id, channel_id=channel_id)
         data = load_qa_data(channel_id=channel_id)

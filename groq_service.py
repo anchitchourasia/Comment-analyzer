@@ -122,6 +122,15 @@ def review_question(question, suggested_answer=None, records=None, post=None):
             },
             timeout=TIMEOUT_SECONDS,
         )
+        status_code = getattr(response, "status_code", 200)
+        if status_code != 200:
+            try:
+                err_data = response.json().get("error", {})
+                err_msg = err_data.get("message") or f"HTTP {status_code}"
+            except Exception:
+                err_msg = getattr(response, "text", "") or f"HTTP {status_code}"
+            return _unavailable(f"Groq API error ({status_code}): {err_msg}")
+
         content = response.json()["choices"][0]["message"]["content"]
     except requests.exceptions.Timeout:
         return _unavailable(f"Groq timed out after {TIMEOUT_SECONDS:.0f}s")

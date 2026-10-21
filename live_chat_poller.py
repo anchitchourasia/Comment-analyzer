@@ -38,6 +38,7 @@ from googleapiclient.errors import HttpError
 import qa_engine
 from qa_engine import atomic_write_json, normalize_text
 import groq_service
+from backend import semantic_retriever, review_service
 
 # --- tunables ------------------------------------------------------------------
 
@@ -325,23 +326,33 @@ def process_message(state, author_name, author_channel_id, text, poster,
     ch_id = getattr(state, "channel_id", "") or None
     v_id = getattr(state, "video_id", "") or None
 
-    # First check keyword trigger match in Q&A Memory Bank
-    match, score = qa_engine.find_best_answer(
-        text, qa_data=qa_engine.load_qa_data(channel_id=ch_id), channel_id=ch_id
-    )
+    # 1. Genuine Multilingual Semantic Retrieval (Pinecone vector search with local fallback)
+    sem_retriever = semantic_retriever.SemanticQARetriever()
+    sem_result = sem_retriever.retrieve(text, channel_id=ch_id)
+    match = sem_result.matched_record
+    score = sem_result.score
+    match_type = sem_result.match_type
 
     answer_text = match["answer_text"] if match else None
     record_id = match["id"] if match else None
 
-    # Groq AI Model Integration: Grounded RAG verification against memory bank
-    if groq_service.get_api_key() and answer_text:
+    # Grounded LLM Review: Validate relevance without inventing answers or inflating retrieval scores
+    if answer_text and match:
         try:
-            records = qa_engine.load_qa_data(channel_id=ch_id)
-            ai_res = groq_service.review_question(text, suggested_answer=answer_text, records=records)
-            if ai_res and ai_res.get("ok") and ai_res.get("reliable") and ai_res.get("answer"):
-                answer_text = ai_res.get("answer")
-                # Boost confidence score when Groq AI verifies grounded match
-                score = max(score, 0.82)
+            cand_q = match.get("normalized_question", "")
+            rev_res = review_service.review_qa_candidate(
+                viewer_question=text,
+                candidate_question=cand_q,
+                candidate_answer=answer_text,
+            )
+            if rev_res.outcome == "reject":
+                # Rejected by reviewer: suppress answer to avoid sending inaccurate response
+                answer_text = None
+            elif rev_res.outcome == "ambiguous":
+                # Ambiguous: retain for suggestions only, disable auto-post
+                if match:
+                    match["auto_reply"] = False
+            # Note: Retrieval score is NEVER inflated to 0.82 or 1.0 after review
         except Exception:
             pass
 
@@ -349,8 +360,12 @@ def process_message(state, author_name, author_channel_id, text, poster,
     is_auto = bool(match.get("auto_reply")) if match else False
     cooldown_sec = match.get("cooldown_seconds", 60) if match else 60
 
-    # Keyword Trigger Auto-Reply: Trigger auto-posting first if rule has auto_reply enabled
-    if match and answer_text and score >= AUTO_REPLY_SCORE and is_auto:
+    # SAFETY GUARD: Semantic-only matches are SUGGESTION-ONLY by default.
+    # Never auto-post a pure semantic match without streamer explicit keyword match.
+    is_semantic_only = (match_type == 'semantic')
+
+    # Keyword Trigger Auto-Reply: Trigger auto-posting ONLY if rule has auto_reply enabled AND is not semantic-only
+    if match and answer_text and score >= AUTO_REPLY_SCORE and is_auto and not is_semantic_only:
         if poster is not None:
             posted = poster.post_answer(
                 answer_text, state.live_chat_id, record_id=record_id, cooldown_seconds=cooldown_sec

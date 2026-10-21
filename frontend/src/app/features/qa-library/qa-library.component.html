@@ -57,6 +57,18 @@
       </button>
     </div>
 
+    <div class="sandbox-toggle-row" style="margin-top: 10px; display: flex; align-items: center; gap: 10px; font-size: 0.85rem;">
+      <label style="display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none;">
+        <input 
+          type="checkbox" 
+          [(ngModel)]="bypassKeywords" 
+          id="bypassKeywordsToggle"
+          style="cursor: pointer; width: 16px; height: 16px;"
+        />
+        <span>⚡ <strong>Force Pure Semantic Search</strong> (Bypass keyword triggers to test Pinecone vector embeddings)</span>
+      </label>
+    </div>
+
     @if (testResult) {
       <div class="test-result-box glass-card">
         <div class="score-gauge">
@@ -65,13 +77,40 @@
           <span class="category-pill" [ngClass]="testResult.score >= 0.8 ? 'cat-high' : (testResult.score >= 0.5 ? 'cat-med' : 'cat-low')">
             {{ testResult.score >= 0.8 ? 'High (≥80%)' : (testResult.score >= 0.5 ? 'Medium (50-79%)' : 'Low (<50%)') }}
           </span>
+          @if (testResult.match_type) {
+            <span class="category-pill" style="margin-top: 6px; font-size: 0.72rem;" [ngClass]="testResult.match_type === 'semantic' || testResult.match_type === 'hybrid' || testResult.match_type === 'exact_keyword' ? 'cat-high' : 'cat-med'">
+              {{ testResult.match_type | uppercase }}
+            </span>
+          }
         </div>
         <div class="matched-details">
           @if (testResult.matched_record) {
             <div class="matched-title">Matched Question: "{{ testResult.matched_record.normalized_question }}"</div>
             <div class="matched-answer">Answer: "{{ testResult.matched_record.answer_text }}"</div>
+            @if (testResult.lexical_score !== null && testResult.lexical_score !== undefined) {
+              <div class="score-breakdown" style="font-size: 0.78rem; opacity: 0.8; margin-top: 4px;">
+                Semantic: 
+                @if (testResult.semantic_score !== null && testResult.semantic_score !== undefined) {
+                  {{ (testResult.semantic_score * 100).toFixed(0) }}%
+                } @else {
+                  <span style="color: #fca5a5; font-style: italic;">N/A (Bypassed by Keyword Trigger)</span>
+                }
+                | Lexical: {{ (testResult.lexical_score * 100).toFixed(0) }}%
+                @if (testResult.model_name) {
+                  &nbsp;·&nbsp; Model: <code>{{ testResult.model_name }}</code>
+                }
+                @if (testResult.retrieval_source) {
+                  &nbsp;·&nbsp; Source: <code>{{ testResult.retrieval_source }}</code>
+                }
+              </div>
+            }
           } @else {
             <div class="no-match">No high-confidence match found (Score &lt; 0.50).</div>
+            @if (testResult.fallback_reason) {
+              <div class="fallback-note" style="font-size: 0.75rem; opacity: 0.7; margin-top: 4px;">
+                Note: {{ testResult.fallback_reason }}
+              </div>
+            }
           }
 
           @if (testResult.ai_draft) {

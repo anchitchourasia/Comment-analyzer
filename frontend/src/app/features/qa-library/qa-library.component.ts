@@ -28,6 +28,7 @@ export class QaLibraryComponent {
   testQuestionInput = '';
   testResult: MatcherTestResult | null = null;
   testing = false;
+  bypassKeywords = false;
 
   @HostListener('document:keydown.escape')
   onEscapePress() {
@@ -106,7 +107,7 @@ export class QaLibraryComponent {
   onRunSandboxTest() {
     if (!this.testQuestionInput.trim()) return;
     this.testing = true;
-    this.qaService.testMatcher(this.testQuestionInput.trim()).subscribe({
+    this.qaService.testMatcher(this.testQuestionInput.trim(), this.bypassKeywords).subscribe({
       next: (res) => {
         this.testing = false;
         this.testResult = res;

@@ -116,6 +116,7 @@ class QaMemoryCreateRequest(BaseModel):
 
 class QaTestMatcherRequest(BaseModel):
     question: str
+    bypass_keywords: Optional[bool] = False
 
 class CommentAnalyzeRequest(BaseModel):
     video_id: str
